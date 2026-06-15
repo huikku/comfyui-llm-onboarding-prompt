@@ -16,11 +16,18 @@ LLMs frequently:
 
 ComfyUI exposes `/object_info` — a REST API that returns every loaded node with its exact inputs, outputs, types, and defaults. This is the same API that ComfyUI's own frontend uses. By teaching your LLM to `curl` this endpoint first, it can generate workflows using only verified, real nodes.
 
+## Two versions
+
+| | What it does |
+|---|---|
+| [`ONBOARDING_PROMPT-v2.md`](ONBOARDING_PROMPT-v2.md) **(recommended)** | Everything in v1, plus: picks the correct JSON format for the job (flat **API/prompt** format for executing via `/prompt` vs **litegraph** format for the UI), verifies that referenced model files actually exist, and **validates each workflow by executing it** and debugging from real errors before declaring it done. |
+| [`ONBOARDING_PROMPT-v1.md`](ONBOARDING_PROMPT-v1.md) | The original, node-discovery-focused prompt — teaches the LLM to query `/object_info` so it stops inventing node names. Smaller and simpler if all you want is correct node usage. |
+
 ## Usage
 
 1. **Start ComfyUI** on your machine (default: `http://localhost:8188`)
-2. **Copy the contents of [`ONBOARDING_PROMPT.md`](ONBOARDING_PROMPT.md)** into your LLM conversation
-3. **Ask the LLM to generate a workflow** — it will now query the API to verify nodes before generating JSON
+2. **Copy the contents of [`ONBOARDING_PROMPT-v2.md`](ONBOARDING_PROMPT-v2.md)** into your LLM conversation
+3. **Ask the LLM to generate a workflow** — it will now query the API to verify nodes (and, in v2, run the workflow to validate it) before handing it to you
 
 ## Quick Test
 
