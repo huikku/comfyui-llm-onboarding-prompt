@@ -27,13 +27,35 @@ ComfyUI has **two** workflow formats. They are NOT interchangeable. Pick deliber
 
 ---
 
+### Step 0.5 — Install ComfyUI if it isn't already running
+
+Skip this whenever Step 1 succeeds. If nothing is listening and ComfyUI isn't installed on this machine:
+
+```bash
+git clone https://github.com/comfyanonymous/ComfyUI && cd ComfyUI
+python3 -m venv .venv && . .venv/bin/activate
+# NVIDIA / CUDA 12.x. For CPU-only, AMD/ROCm, or Apple Silicon, follow the repo README instead.
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+pip install -r requirements.txt
+python main.py --listen 0.0.0.0 --port 8188      # add --cpu if there's no GPU
+```
+
+- **Custom nodes:** install ComfyUI-Manager once and manage packs through it, or `git clone` each pack into `custom_nodes/` and `pip install -r` its requirements. **Restart ComfyUI** afterward so `/object_info` reflects the new nodes.
+  ```bash
+  git clone https://github.com/Comfy-Org/ComfyUI-Manager custom_nodes/ComfyUI-Manager
+  ```
+- **Models** go under `models/<type>/` (`checkpoints`, `loras`, `vae`, `clip`, controlnets, …). ComfyUI only offers files that are actually on disk — see Step 3.
+- One-liner alternative: `pip install comfy-cli && comfy install`, then `comfy launch`.
+
+---
+
 ### Step 1 — Confirm ComfyUI is up
 
 ```bash
 curl -s http://localhost:8188/object_info | head -c 100
 ```
 
-If this returns nothing, ComfyUI isn't running (or is on another port) — stop and say so.
+If this returns nothing, ComfyUI isn't running (or is on another port). Verify the host/port; only install (Step 0.5) if it's genuinely absent.
 
 ---
 
@@ -129,7 +151,34 @@ curl -s -X POST http://localhost:8188/upload/image -F "image=@/path/to/input.png
 
 ---
 
-### Step 6 (optional) — If you need a UI-editable graph
+### Step 6 — Iterate on the rendered output (validate by looking)
+
+A graph that returns zero `node_errors` is **valid, not correct**. Mangled hands, a background that drifted, an effect that's too strong, a hard matte seam — none of that appears in `node_errors`; it only shows up in the pixels. So once a graph runs, **look at the output, judge it against what you intended, change parameters, and re-run until it looks right.** This visual loop is where "it executes" becomes "it's actually good."
+
+Make each iteration a single command — a small script that submits, polls, fetches, and surfaces a frame you can actually look at:
+
+```bash
+pid=$(curl -s -X POST localhost:8188/prompt -H 'Content-Type: application/json' \
+      -d "{\"prompt\": $(cat graph.json), \"client_id\":\"iter\"}" \
+      | python3 -c 'import sys,json;print(json.load(sys.stdin)["prompt_id"])')
+# poll GET /history/$pid until it appears, read the output filename, then fetch it:
+#   curl -s "localhost:8188/view?filename=<f>&subfolder=<s>&type=output" -o out.png
+# for video output, pull a representative frame to inspect:
+ffmpeg -y -v error -i out.mp4 -vf 'select=eq(n\,12)' -vframes 1 frame.png
+```
+
+Then **view the frame** and decide. Re-run the same script after each parameter change so iterations stay cheap.
+
+Two comparisons make problems obvious fast:
+
+- **Side-by-side**, original vs result: `ffmpeg -i a.png -i b.png -filter_complex hstack out.png`.
+- **Difference over 50% gray** — `0.5 + 0.5*(a - b)` per pixel: regions that are identical read as flat mid-gray, and only real changes pop. The quickest way to prove e.g. "the background didn't change," or to catch a composite seam.
+
+Tune the **parameters**, not just the wiring: resolution, strength/denoise, mask grow/feather, steps/cfg, seed. (Rig-specific knobs — an OOM fallback ladder, mask-grow scaling with resolution, a background-preservation comp — are project specifics; keep those in your own notes, not in this general loop.)
+
+---
+
+### Step 7 (optional) — If you need a UI-editable graph
 
 Only now produce litegraph format, and save to `user/default/workflows/<name>.json` so ComfyUI's workflow browser picks it up. Litegraph gotchas to get right:
 
