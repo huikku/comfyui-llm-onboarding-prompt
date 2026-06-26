@@ -1,6 +1,6 @@
 # ComfyUI LLM Onboarding Prompt
 
-![Build ComfyUI workflows that actually work — discover real nodes from the live API, then loop build → run → look → critique → fix](web/hero.png)
+![Point an agent at ComfyUI and get workflows that actually work — the agent discovers real nodes from the live API, then loops build → run → look → critique → fix](web/hero.png)
 
 **Teach any LLM to build ComfyUI workflows that actually run — and then keep iterating until the output is right.**
 
