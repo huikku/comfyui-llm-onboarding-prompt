@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Geist+Mono:wght@400..700&family=Instrument+Sans:wght@400..700&display=swap');
+  :root{--r1:#E9A14B;--font-display:"Bricolage Grotesque",sans-serif;--font-body:"Instrument Sans",system-ui,sans-serif;--font-mono:"Geist Mono",ui-monospace,monospace}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1200px;height:630px}
+  body{font-family:var(--font-body);background:#0e1013;color:#f4efe5;overflow:hidden}
+  .mono{font-family:var(--font-mono)}
+  .card{position:relative;width:1200px;height:630px;padding:58px 66px;display:flex;flex-direction:column}
+  .card::before{content:"";position:absolute;inset:0;opacity:.5;background-image:linear-gradient(90deg,rgba(255,255,255,.028) 1px,transparent 1px);background-size:150px 100%}
+  .card::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(720px 440px at 92% -8%,rgba(232,151,58,.14),transparent 60%)}
+  .layer{position:relative;z-index:1;display:flex;flex-direction:column;height:100%}
+  .eyebrow{font-size:16px;font-weight:700;letter-spacing:6px;color:#6c737a;text-transform:uppercase}
+  h1{font-family:var(--font-display);margin-top:16px;font-size:64px;line-height:.97;font-weight:800;letter-spacing:-2px;color:#f4efe5}
+  h1 .amber{color:#E9A14B}
+  .sub{margin-top:18px;font-size:21px;line-height:1.45;color:#9aa1a8;max-width:900px}
+  .sub b{color:#cdd3d9;font-weight:600}
+  .flow{margin-top:32px;display:flex;align-items:center;gap:20px}
+  .stack{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .pill{font-size:17px;font-weight:700;color:#dfe4e9;padding:10px 15px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);text-align:center;min-width:118px}
+  .pill.lead{grid-column:1/-1;background:rgba(255,255,255,.07)}
+  .cap{font-family:var(--font-mono);font-size:16px;font-weight:700;color:#E9A14B;padding:11px 15px;border-radius:10px;background:rgba(233,161,75,.08);border:1px solid rgba(233,161,75,.24);text-align:center;min-width:112px}
+  .cap.lead{grid-column:1/-1;background:rgba(233,161,75,.12)}
+  .arrow{color:#5c636b;font-size:30px}
+  .hub{font-family:var(--font-mono);font-weight:700;font-size:20px;color:#1b1205;background:linear-gradient(180deg,#eaa64a,#e2883a);padding:16px 22px;border-radius:14px;box-shadow:0 18px 40px rgba(232,151,58,.30);text-align:center}
+  .spacer{flex:1}
+  .foot{margin-top:24px;display:flex;align-items:flex-end;justify-content:space-between}
+  .foot .src{font-size:16px;color:#737a81}.foot .src b{color:#cdd3d9}
+  .brand{text-align:right}.brand .name{font-size:24px;font-weight:800;color:#f1ece2}.brand .tag{margin-top:6px;font-size:14px;letter-spacing:4px;color:#737a81}
+  .invader{width:26px;height:auto;color:var(--r1)}.nm{display:flex;align-items:center;justify-content:flex-end;gap:9px}
+</style></head>
+<body><div class="card"><div class="layer">
+  <div class="eyebrow mono">comfyui-llm-onboarding-prompt · open source</div>
+  <h1>Build ComfyUI workflows<br>that <span class="amber">actually work</span>.</h1>
+  <p class="sub">Teach any LLM to discover real nodes from ComfyUI's live API — <b>no hallucinated names</b> — then loop: <b>build → run → look → critique → fix</b>, until the output matches the brief.</p>
+  <div class="flow">
+    <div class="stack">
+      <div class="pill lead">the live API</div>
+      <div class="pill">/object_info</div><div class="pill">real nodes</div>
+      <div class="pill">real models</div><div class="pill">no guessing</div>
+    </div>
+    <div class="arrow">&rarr;</div>
+    <div class="hub">build the<br>API graph</div>
+    <div class="arrow">&rarr;</div>
+    <div class="stack">
+      <div class="cap lead">the loop &#8635;</div>
+      <div class="cap">run</div><div class="cap">look</div>
+      <div class="cap">critique</div><div class="cap">fix</div>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="foot">
+    <div class="src mono">discover &rarr; build &rarr; run &rarr; <b>look</b> &rarr; repeat · MIT · prompts + a Claude Code skill</div>
+    <div class="brand"><div class="nm"><svg class="invader" viewBox="0 0 11 8" shape-rendering="crispEdges" fill="currentColor"><rect x="2" y="0" width="1" height="1"/><rect x="8" y="0" width="1" height="1"/><rect x="3" y="1" width="1" height="1"/><rect x="7" y="1" width="1" height="1"/><rect x="2" y="2" width="1" height="1"/><rect x="3" y="2" width="1" height="1"/><rect x="4" y="2" width="1" height="1"/><rect x="5" y="2" width="1" height="1"/><rect x="6" y="2" width="1" height="1"/><rect x="7" y="2" width="1" height="1"/><rect x="8" y="2" width="1" height="1"/><rect x="1" y="3" width="1" height="1"/><rect x="2" y="3" width="1" height="1"/><rect x="4" y="3" width="1" height="1"/><rect x="5" y="3" width="1" height="1"/><rect x="6" y="3" width="1" height="1"/><rect x="8" y="3" width="1" height="1"/><rect x="9" y="3" width="1" height="1"/><rect x="0" y="4" width="1" height="1"/><rect x="1" y="4" width="1" height="1"/><rect x="2" y="4" width="1" height="1"/><rect x="3" y="4" width="1" height="1"/><rect x="4" y="4" width="1" height="1"/><rect x="5" y="4" width="1" height="1"/><rect x="6" y="4" width="1" height="1"/><rect x="7" y="4" width="1" height="1"/><rect x="8" y="4" width="1" height="1"/><rect x="9" y="4" width="1" height="1"/><rect x="10" y="4" width="1" height="1"/><rect x="0" y="5" width="1" height="1"/><rect x="2" y="5" width="1" height="1"/><rect x="3" y="5" width="1" height="1"/><rect x="4" y="5" width="1" height="1"/><rect x="5" y="5" width="1" height="1"/><rect x="6" y="5" width="1" height="1"/><rect x="7" y="5" width="1" height="1"/><rect x="8" y="5" width="1" height="1"/><rect x="10" y="5" width="1" height="1"/><rect x="0" y="6" width="1" height="1"/><rect x="2" y="6" width="1" height="1"/><rect x="8" y="6" width="1" height="1"/><rect x="10" y="6" width="1" height="1"/><rect x="3" y="7" width="1" height="1"/><rect x="4" y="7" width="1" height="1"/><rect x="6" y="7" width="1" height="1"/><rect x="7" y="7" width="1" height="1"/></svg><span class="name">Alienrobot</span></div><div class="tag mono">John Huikku · alienrobot.com</div></div>
+  </div>
+</div></div></body></html>
