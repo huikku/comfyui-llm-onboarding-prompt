@@ -99,7 +99,20 @@ Two comparisons make defects jump out: **side-by-side** (`ffmpeg -i a.png -i b.p
 
 **4 · CRITIQUE.** State, concretely, how this output differs from the intent. Not "looks fine" — name the specific defect: *"six fingers," "relight too warm on the left," "hard matte edge along the jaw," "upscale softened the eyes," "the comp shifted the background," "the face flickers between frames."* If you genuinely can't name a defect, the requirements are met.
 
-**5 · DECIDE.** Can you still name a concrete defect? → pick the **one** change that fixes it and go back to step 1, no need to check in. Can you **not** name a defect — the brief's requirements are met? → **stop, present the result, and ask me for feedback.** Don't keep iterating past that point on your own.
+**5 · DECIDE.** Can you still name a concrete defect? → pick the **one** change that fixes it, apply the ratchet below, and go back to step 1, no need to check in. Can you **not** name a defect — the brief's requirements are met? → **stop, present the result, and ask me for feedback.** Don't keep iterating past that point on your own.
+
+---
+
+### Keep-best, revert, and pivot — the ratchet that makes it converge
+
+One change per pass isn't enough on its own — you also have to refuse to build on regressions. Run the loop as a **ratchet** so progress only moves one direction:
+
+- **Hold a best-so-far.** Save each pass's output *and the exact graph that produced it*. The best result seen so far is your baseline.
+- **Keep or revert, every pass.** Compare the new output to the best. Better → it becomes the new best. Worse or no better → **revert to the best-known graph** and try a *different* change. Never keep iterating on top of a change that made things worse.
+- **Judge by the right yardstick.** Where the brief has an *objective* test — does it tile with no seam? exact object count? background unchanged (difference-over-gray)? identity preserved? — gate keep/revert on that measurable check. Where it's *aesthetic*, your **eye** is the judge, not a single number: a metric can climb while the picture gets worse (a busier background can raise a "sharpness" score while the subject softens). Objective gate where one exists; look everywhere else.
+- **Pivot on plateau.** If several passes in a row don't beat the best, escalate instead of nudging the same knob: (1) change *which* parameter or strategy → (2) change the *wiring / node / model* (different sampler family, add a control or identity node, swap the checkpoint) → (3) still stuck → stop and present the best-so-far with what you tried. Don't grind a dead knob.
+
+Keep a **loop ledger** as you go — one line per pass: the **hypothesis** (the single change and why), the **observation** (what it did to the output), the **verdict** (new best / reverted). It makes the run auditable and stops you re-trying something you already rejected.
 
 ---
 
@@ -125,9 +138,9 @@ Don't run silently. Every pass, put the output in front of me:
 You don't stop after the first version that runs — you keep fixing autonomously while a real defect remains. But the loop isn't infinite: **when the output meets the brief, pause and hand it to me** —
 1. the final **output**,
 2. the **graph** — API / runnable format, plus a **UI / litegraph `workflow.json`** only if I asked for one, and
-3. the running **loop log** — one line per pass, what you changed and what it fixed —
+3. the running **loop ledger** — one line per pass: the change (hypothesis), what it did (observation), and whether it was kept as the new best or reverted —
 
-and **ask whether it's approved or needs changes.** If I approve, you're done. If I want changes, resume the loop from there. I can also stop you at any time. Keep that loop log running the whole way so it's ready the instant you reach the checkpoint.
+and **ask whether it's approved or needs changes.** If I approve, you're done. If I want changes, resume the loop from there. I can also stop you at any time. Keep the ledger running the whole way so it's ready the instant you reach the checkpoint.
 
 ---
 
@@ -156,7 +169,8 @@ and **ask whether it's approved or needs changes.** If I approve, you're done. I
 
 - Validate by **looking**, never by a green "it ran."
 - **One change per pass** — so you always know what helped.
+- **Ratchet:** hold a best-so-far; keep a change only if it beats it, else revert and try something different. Pivot (param → wiring → model) when passes plateau.
 - Keep each pass to **one command** — cheap iterations mean more of them.
-- **Save every pass's output** — you'll want to compare them.
+- **Save every pass's output** — you'll want to compare them (and to revert to the best).
 - Tune **parameters**, not just wiring. Most "it's almost right" problems are a knob, not a rewire.
 - On heavy jobs (video, big batches) **iterate on a short range / a few frames, and commit the full run only once it's dialed in.**

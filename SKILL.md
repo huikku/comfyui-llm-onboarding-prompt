@@ -114,6 +114,8 @@ Then **view the frame** (read the image) and decide. Re-run the same script afte
 
 Tune the **parameters**, not just the wiring: resolution, strength/denoise, mask grow/feather, steps/cfg, seed. (Rig-specific knobs — the OOM ladder, mask-grows-with-resolution, background-preservation comps — belong in project notes/memory, not in this general loop.)
 
+**Run it as a ratchet.** Hold a **best-so-far** (its output *and* the exact graph). Each pass, keep the change only if it beats the best; if it's worse, **revert to the best-known graph** and try a *different* change — never build on a regression. Gate keep/revert on an **objective** test when the brief has one (seamless tile, exact count, background-unchanged via difference-over-gray, identity preserved); judge **by eye** for aesthetics (a single metric can climb while the picture gets worse). If several passes plateau, **pivot**: param → wiring → node/model, then stop. Keep a one-line-per-pass ledger (change → what it did → kept/reverted).
+
 ## Step 7 (optional) — UI-editable litegraph
 Only if a human needs to edit it. Save to `user/default/workflows/<name>.json`. Gotchas: every link is `[link_id, from_node, from_slot, to_node, to_slot, type]` in the top-level `links` AND referenced in source `outputs[].links` + target `inputs[].link` (unique, consistent; `last_node_id`/`last_link_id` ≥ max used). `widgets_values` is **positional** in widget order, excludes wired inputs, and seed nodes inject an extra `control_after_generate`. When unsure: build in API format, run it, mirror the resolved values.
 

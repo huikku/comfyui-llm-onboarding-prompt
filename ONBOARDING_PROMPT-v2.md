@@ -176,6 +176,8 @@ Two comparisons make problems obvious fast:
 
 Tune the **parameters**, not just the wiring: resolution, strength/denoise, mask grow/feather, steps/cfg, seed. (Rig-specific knobs — an OOM fallback ladder, mask-grow scaling with resolution, a background-preservation comp — are project specifics; keep those in your own notes, not in this general loop.)
 
+**Iterate as a ratchet, not a random walk.** Hold a **best-so-far** — its output *and* the exact graph that made it. After each change, compare to the best: better → new best; worse or no better → **revert to the best-known graph** and try a *different* change (don't build on a regression). Decide with the right yardstick: an **objective** check when the brief has one (seamless tile, exact object count, background unchanged via difference-over-gray, identity preserved), your **eye** for aesthetics — a single number can rise while the picture worsens. If a few passes in a row don't beat the best, **pivot**: change the parameter → the wiring → the node/model, then stop. Keep a one-line ledger per pass (the change, what it did, kept or reverted) so you don't re-try a dead end.
+
 ---
 
 ### Step 7 (optional) — If you need a UI-editable graph
