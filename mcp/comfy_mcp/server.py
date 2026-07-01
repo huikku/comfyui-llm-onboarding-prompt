@@ -65,10 +65,13 @@ mcp = FastMCP(
         "seams, video temporal stability, 'make it look right'. Then run the loop: "
         "get_result -> get_image to actually LOOK, name ONE concrete defect, change "
         "ONE parameter, re-run — repeat until you cannot name a real defect, then "
-        "present the result + a per-pass log and ask for sign-off. A graph with "
-        "zero node_errors is VALID, NOT CORRECT — never trust a green run or a "
-        "single metric; judge by looking. Load the `comfy_loop` prompt for the "
-        "full autonomous method.\n\n"
+        "present the result + a per-pass ledger and ask for sign-off. Run it as a "
+        "RATCHET: hold a best-so-far (output + exact graph); keep a change only if it "
+        "beats the best, else REVERT and try something different (never build on a "
+        "regression); pivot param -> wiring -> model on plateau. A graph with zero "
+        "node_errors is VALID, NOT CORRECT — never trust a green run or a single "
+        "metric; gate on an objective test only where the brief has one, judge by "
+        "eye otherwise. Load the `comfy_loop` prompt for the full autonomous method.\n\n"
         "SKIP the loop only for mechanical, non-aesthetic tasks (a format "
         "conversion, a one-shot where the user explicitly wants just a runnable "
         "graph, or a pure API query). When unsure, do at least one look-and-"
@@ -832,7 +835,9 @@ async def get_result(prompt_id: str, timeout_s: float = 120.0) -> str:
         "hard matte edge, over-strong effect, wrong count — change exactly ONE "
         "parameter and re-submit; or (b) if you genuinely cannot name a defect, "
         "declare the brief met and present the result for sign-off. A green run is "
-        "valid, not correct — decide by looking, never by a single metric."
+        "valid, not correct — decide by looking, never by a single metric. "
+        "RATCHET: if this pass is worse than your best-so-far, revert to the best "
+        "graph and try a different change instead of building on the regression."
     )
 
 

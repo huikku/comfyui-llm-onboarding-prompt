@@ -45,7 +45,7 @@ built on opposite philosophies and are genuinely complementary.
 | **Run a template with overrides** | ✓ `template_slots` + `run_template` (no graph loaded into context) | ✓ `get_template_schema` + `run_template` / `apply_slots` |
 | **Token efficiency** | Compact node notation (~90% off `object_info`) + FlowZip graphs (~85% off litegraph) — matters because the loop re-pays discovery every iteration | Not documented |
 | **Building philosophy** | **Loop-first** — discover, build, run, then *iterate on the pixels* until a trained eye accepts it | **Template-first** — match a proven template, then run it |
-| **Quality-iteration discipline** | The whole point: look → critique → change one knob → re-run, enforced in tool docs/responses/instructions | Not the focus; optimized for "get a working result fast" |
+| **Quality-iteration discipline** | The whole point: look → critique → change one knob → **keep-best/revert (ratchet)** → re-run, enforced in tool docs/responses/instructions (ratchet adapted from Karpathy's AutoResearch) | Not the focus; optimized for "get a working result fast" |
 | **Workflow save / share / reproduce** | ✗ (you manage your own files) | ✓ `save_workflow`, `share_workflow`, `import_shared_workflow`, reproducibility tracking |
 | **Job orchestration** | Basic (`submit`, `get_result`, `get_queue`, `interrupt`) | Mature (`get_job_status`, `use_previous_output`, `cancel_job`) |
 | **Maturity / support** | ~400 lines of hackable MIT Python, unmaintained hobby code | Production, built and maintained by the ComfyUI team |
@@ -128,9 +128,14 @@ At handshake the server tells the agent *when to loop and when not to*:
 - **PREFER LOOPING** whenever a trained eye could reject the output — composition/
   count, likeness, matte/edge quality, upscale/restore, relight, texture seams,
   video temporal stability, "make it look right."
+- **RATCHET** — hold a best-so-far; keep a change only if it beats it, else revert
+  and try something different; pivot param → wiring → model on plateau. Gate on an
+  objective test only where the brief has one; judge by eye otherwise.
 - **SKIP** the loop only for mechanical tasks (format conversion, a pure API
   query, or when the user explicitly wants just a runnable graph).
 - **When unsure**, do at least one look-and-critique pass before declaring done.
+
+The ratchet/ledger/pivot are adapted from [Karpathy's AutoResearch loop](https://www.nextbigfuture.com/2026/03/andrej-karpathy-on-code-agents-autoresearch-and-the-self-improvement-loopy-era-of-ai.html), tuned for subjective image work (objective gate only where one exists; a human sign-off checkpoint instead of running forever). These policy lines live in the server `instructions` + tool responses; the full method is in the `comfy_loop` prompt, which serves the repo's loop doc verbatim.
 
 > MCP can't *force* behavior — it exposes capabilities and guidance. This makes
 > looping the strong, well-scoped default the agent is repeatedly told to prefer.
