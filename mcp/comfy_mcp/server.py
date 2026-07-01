@@ -453,6 +453,103 @@ async def flowzip_to_api(flowzip: str) -> str:
     )
 
 
+async def _fetch_template_json(name: str, source: str, pack: str):
+    """Fetch a template's raw litegraph JSON. Returns (dict|None, error|None)."""
+    if source == "installed":
+        if not pack:
+            return None, "source='installed' needs a pack (see search_templates)."
+        async with _client() as c:
+            r = await c.get(f"/api/workflow_templates/{pack}/{name}.json")
+    else:
+        async with httpx.AsyncClient(timeout=20.0) as c:
+            r = await c.get(f"{_TPL_BASE}/templates/{name}.json")
+    if r.status_code != 200:
+        return None, f"Template '{name}' not found (HTTP {r.status_code})."
+    try:
+        return r.json(), None
+    except Exception:  # noqa: BLE001
+        return None, f"Template '{name}' did not return JSON."
+
+
+def _is_link(v: Any) -> bool:
+    return isinstance(v, list) and len(v) == 2 and isinstance(v[0], str) and isinstance(v[1], int)
+
+
+@mcp.tool()
+async def template_slots(name: str, source: str = "online", pack: str = "") -> str:
+    """List a template's overridable inputs WITHOUT loading the full graph JSON.
+
+    Converts the template to API format and reports each node's literal (non-wired)
+    inputs and current values — the curated parameter list you can change with
+    run_template. Far smaller than the raw graph. Subgraph/unknown nodes can't be
+    expanded and are reported (their inputs aren't overridable this way).
+    """
+    wf, err = await _fetch_template_json(name, source, pack)
+    if err:
+        return err
+    async with _client() as c:
+        oi = (await c.get("/object_info")).json()
+    api, warns = litegraph_to_api(wf, oi)
+    lines = []
+    for nid, node in api.items():
+        lits = {k: v for k, v in node["inputs"].items() if not _is_link(v)}
+        if lits:
+            lines.append(f"  {nid} ({node['class_type']}): {json.dumps(lits, ensure_ascii=False)}")
+    note = ("\nNot overridable (subgraph/unknown, skipped): " + "; ".join(warns)) if warns else ""
+    return (
+        f"Overridable inputs for '{name}' ({len(api)} nodes). Change them with "
+        "run_template(name, overrides={node_id: {input: value}}):\n"
+        + ("\n".join(lines) if lines else "  (none)")
+        + note
+    )
+
+
+@mcp.tool()
+async def run_template(name: str, overrides: dict | None = None, source: str = "online",
+                       pack: str = "", client_id: str = "comfy-mcp") -> str:
+    """Run a known-good template with input overrides — WITHOUT loading the graph
+    into context. Fetches the template, converts to API format, applies overrides,
+    and submits. Use template_slots first to see what you can override.
+
+    overrides: {node_id: {input_name: value}} (node ids and inputs from
+    template_slots). After it runs, call get_result then get_image and LOOK — a
+    green run is valid, not correct.
+
+    Limitation: subgraph templates can't be expanded (converter coverage ~88% of
+    non-subgraph nodes); if nodes are skipped it's reported and the run may be
+    incomplete. Confirm the template's nodes/models exist first (find_missing_nodes).
+    """
+    overrides = overrides or {}
+    wf, err = await _fetch_template_json(name, source, pack)
+    if err:
+        return err
+    async with _client() as c:
+        oi = (await c.get("/object_info")).json()
+    api, warns = litegraph_to_api(wf, oi)
+    applied = []
+    for nid, ins in overrides.items():
+        if str(nid) in api and isinstance(ins, dict):
+            api[str(nid)]["inputs"].update(ins)
+            applied.append(str(nid))
+        else:
+            return (f"override target node '{nid}' not in the converted graph "
+                    "(run template_slots to see valid node ids).")
+    async with _client() as c:
+        r = await c.post("/prompt", json={"prompt": api, "client_id": client_id})
+    if r.status_code != 200:
+        return ("REJECTED (HTTP {}). Not an iteration — read node_errors, fix, retry:\n{}"
+                .format(r.status_code, r.text[:400])
+                + (f"\n(skipped: {'; '.join(warns)})" if warns else ""))
+    pid = r.json().get("prompt_id")
+    msg = (f"Queued template '{name}' — prompt_id={pid} ({len(api)} nodes; "
+           f"overrides applied to {applied or 'none'}).")
+    if warns:
+        msg += (f"\nWARNING: {len(warns)} node(s) skipped (subgraph/unknown) — result may be "
+                f"incomplete: {'; '.join(warns[:5])}")
+    msg += "\nNow: get_result(prompt_id) then get_image to LOOK, then critique and iterate."
+    return msg
+
+
 # --------------------------------------------------------------------------- #
 # EXTEND — install what a template needs (via ComfyUI-Manager, trusted registry)
 # --------------------------------------------------------------------------- #

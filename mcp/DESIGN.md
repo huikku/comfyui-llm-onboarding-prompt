@@ -95,10 +95,11 @@ theirs — it's the combination, and we're positioned to build it:
 - **Fix:** the install path — move from "install latest pack" toward
   **version-pinned, dependency-aware** installs; improve class→pack resolution
   (it currently takes the first registry match and can pick the wrong pack).
-- **Add (informed by the cloud, on-identity):** enrich the template index with
-  `requiresCustomNodes`/`models`/`usage` (already in the open catalog data);
-  `run_template` with input overrides (run known-good graphs without loading the
-  JSON); typed `list_nodes` filters. See the README/roadmap.
+- **Added (informed by the cloud, on-identity):** `template_slots` + `run_template`
+  with input overrides — run a known-good graph without loading the JSON into
+  context (litegraph→API under the hood; subgraph templates reported, not expanded).
+  Still open: enrich the template index with `requiresCustomNodes`/`models`/`usage`
+  (already in the open catalog data) and typed `list_nodes` filters.
 - **Model *discovery + download* — now closed** (`search_models` + `install_model`).
   Reads ComfyUI-Manager's model catalog (trusted, whitelisted source), flags what's
   already installed (ground truth), and downloads into the right folder — no restart

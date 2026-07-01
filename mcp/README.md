@@ -42,6 +42,7 @@ built on opposite philosophies and are genuinely complementary.
 | **Workflow templates** | ✓ `search_templates` / `get_template` over the **same open catalog** (`Comfy-Org/workflow_templates`, ~550, browsed live from GitHub — no install) **and** your install's own templates | ✓ over the cloud's copy of that catalog (plus any cloud-only additions) |
 | **Install missing nodes for a template** | ✓ `find_missing_nodes` + `install_node_pack` via ComfyUI-Manager on your host (then `restart_comfyui`) | ✓ handled cloud-side (the cloud already has the packs) |
 | **Model discovery / download** | ✓ `search_models` (Manager catalog, flags what's already installed) + `install_model` into the right folder | ✓ `search_models` over a broader HuggingFace/Civitai catalog with source URLs |
+| **Run a template with overrides** | ✓ `template_slots` + `run_template` (no graph loaded into context) | ✓ `get_template_schema` + `run_template` / `apply_slots` |
 | **Token efficiency** | Compact node notation (~90% off `object_info`) + FlowZip graphs (~85% off litegraph) — matters because the loop re-pays discovery every iteration | Not documented |
 | **Building philosophy** | **Loop-first** — discover, build, run, then *iterate on the pixels* until a trained eye accepts it | **Template-first** — match a proven template, then run it |
 | **Quality-iteration discipline** | The whole point: look → critique → change one knob → re-run, enforced in tool docs/responses/instructions | Not the focus; optimized for "get a working result fast" |
@@ -100,6 +101,7 @@ box, and let the agent pick per task.
 | **Tools** | `check_comfyui`, `list_nodes`, `get_node`, `list_models`, `search_models`, `search_templates`, `get_template` | Discover, don't guess |
 | | `find_missing_nodes`, `install_node_pack`, `install_model`, `restart_comfyui` | Extend (install what a template needs) |
 | | `inflate_workflow`, `flowzip_to_api` | Compress (token-efficient graphs) |
+| | `template_slots`, `run_template` | Run a known-good template with overrides (no graph in context) |
 | | `upload_image`, `submit_workflow` | Build → Run |
 | | `get_result`, `get_image` (returns the actual image) | **Look** |
 | | `system_stats`, `get_queue`, `interrupt` | Control |
@@ -151,6 +153,8 @@ At handshake the server tells the agent *when to loop and when not to*:
 | `get_template` | `name`, `pack=""`, `source="online"`, `fmt="flowzip"` | Fetches a template. `fmt="flowzip"` (default) is compact FlowZip text (~85% smaller than raw litegraph JSON); `fmt="json"` for full litegraph. Either way it's litegraph — convert with `flowzip_to_api` before submitting. An online template may need nodes/models you lack — check with `find_missing_nodes`. |
 | `inflate_workflow` | `flowzip` | Expands FlowZip text back into full litegraph JSON. |
 | `flowzip_to_api` | `flowzip` | Converts FlowZip/litegraph → API/prompt format for `submit_workflow`: resolves links, maps widget values to named inputs (type-coerced), skips subgraph/unknown nodes (reported). Review before running; `node_errors` catches drift. |
+| `template_slots` | `name`, `source="online"`, `pack=""` | Lists a template's overridable inputs (node_id → params + current values) **without loading the full graph** — the curated parameter list for `run_template`. |
+| `run_template` | `name`, `overrides={}`, `source="online"`, `pack=""` | Runs a known-good template with `{node_id: {input: value}}` overrides — fetch → convert → apply → submit — without dumping the graph into context. Then `get_result`/`get_image`. Subgraph nodes can't be expanded (reported). |
 
 **Extend** (install what a template needs — requires [ComfyUI-Manager](https://github.com/Comfy-Org/ComfyUI-Manager) on the host)
 | Tool | Args | Returns |

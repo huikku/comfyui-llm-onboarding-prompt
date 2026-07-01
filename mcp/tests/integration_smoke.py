@@ -51,7 +51,7 @@ async def main() -> int:
             await s.initialize()
 
             tools = {t.name for t in (await s.list_tools()).tools}
-            check("20 tools registered", len(tools) >= 20, f"{len(tools)} tools")
+            check("tools registered", len(tools) >= 22, f"{len(tools)} tools")
 
             check("check_comfyui up", "up at" in txt(await s.call_tool("check_comfyui", {})))
             check("list_nodes keyword+display", "match" in txt(await s.call_tool("list_nodes", {"keyword": "upscale"})).lower())
@@ -64,6 +64,7 @@ async def main() -> int:
             fz = txt(await s.call_tool("get_template", {"name": "01_get_started_text_to_image", "source": "online"}))
             check("get_template flowzip", "FlowZip" in fz or "litegraph" in fz)
             check("find_missing_nodes resolves", "missing node" in txt(await s.call_tool("find_missing_nodes", {"name": "templates_hellorob_facegen_skindetail_upscale", "source": "online"})).lower())
+            check("template_slots", "Overridable inputs" in txt(await s.call_tool("template_slots", {"name": "01_get_started_text_to_image", "source": "online"})))
 
             # error robustness
             check("bad node graceful", "No node" in txt(await s.call_tool("get_node", {"class_name": "NopeNode"})))
