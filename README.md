@@ -42,7 +42,10 @@ If you only read one, read **`COMFYUI_WORKFLOW_LOOP_PROMPT.md`** — it superset
 - **Build API format** — the flat, runnable graph you POST to `/prompt` (not the drag-onto-canvas file; ask for that separately).
 - **The inner loop** — `node_errors` means *not yet running*; read it, fix that node, re-POST. That's not an iteration.
 - **The outer loop** — once it runs, *look*. Iterate on **parameters** (denoise, cfg, mask feather, seed…), one change per pass, until a VFX eye would accept it.
-- **Convergence checkpoint** — when it can no longer name a real defect, it stops, presents the output + graph + a per-pass *loop log*, and asks you to approve or request changes.
+- **The ratchet** — hold a *best-so-far*; keep a change only if it beats it, otherwise **revert** and try something different (no building on regressions). Gate on an objective test when the brief has one (seamless tile, exact count, identity preserved); judge by eye for aesthetics. Pivot param → wiring → model when passes plateau.
+- **Convergence checkpoint** — when it can no longer name a real defect, it stops, presents the output + graph + a per-pass *loop ledger*, and asks you to approve or request changes.
+
+The ratchet + ledger + pivot are adapted from [Andrej Karpathy's **AutoResearch** loop](https://www.nextbigfuture.com/2026/03/andrej-karpathy-on-code-agents-autoresearch-and-the-self-improvement-loopy-era-of-ai.html) (keep-or-revert against a best-so-far, an append-only experiment ledger, escalate on plateau) — adapted for *subjective* image work: an objective gate only where the brief has one, the eye elsewhere, and a human sign-off checkpoint instead of running forever.
 
 ---
 
