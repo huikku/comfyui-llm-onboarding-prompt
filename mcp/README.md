@@ -41,6 +41,7 @@ built on opposite philosophies and are genuinely complementary.
 | **Nodes / models available** | Exactly what *you've installed* — custom nodes, private models, all reflected live via `/object_info` | The cloud catalog: `search_models`, `search_templates`, `search_nodes`, subgraph blueprints |
 | **Workflow templates** | ✓ `search_templates` / `get_template` over the **same open catalog** (`Comfy-Org/workflow_templates`, ~550, browsed live from GitHub — no install) **and** your install's own templates | ✓ over the cloud's copy of that catalog (plus any cloud-only additions) |
 | **Install missing nodes for a template** | ✓ `find_missing_nodes` + `install_node_pack` via ComfyUI-Manager on your host (then `restart_comfyui`) | ✓ handled cloud-side (the cloud already has the packs) |
+| **Model discovery / download** | ✓ `search_models` (Manager catalog, flags what's already installed) + `install_model` into the right folder | ✓ `search_models` over a broader HuggingFace/Civitai catalog with source URLs |
 | **Token efficiency** | Compact node notation (~90% off `object_info`) + FlowZip graphs (~85% off litegraph) — matters because the loop re-pays discovery every iteration | Not documented |
 | **Building philosophy** | **Loop-first** — discover, build, run, then *iterate on the pixels* until a trained eye accepts it | **Template-first** — match a proven template, then run it |
 | **Quality-iteration discipline** | The whole point: look → critique → change one knob → re-run, enforced in tool docs/responses/instructions | Not the focus; optimized for "get a working result fast" |
@@ -96,8 +97,8 @@ box, and let the agent pick per task.
 
 | Primitive | What it exposes | Loop step |
 |---|---|---|
-| **Tools** | `check_comfyui`, `list_nodes`, `get_node`, `list_models`, `search_templates`, `get_template` | Discover, don't guess |
-| | `find_missing_nodes`, `install_node_pack`, `restart_comfyui` | Extend (install what a template needs) |
+| **Tools** | `check_comfyui`, `list_nodes`, `get_node`, `list_models`, `search_models`, `search_templates`, `get_template` | Discover, don't guess |
+| | `find_missing_nodes`, `install_node_pack`, `install_model`, `restart_comfyui` | Extend (install what a template needs) |
 | | `inflate_workflow`, `flowzip_to_api` | Compress (token-efficient graphs) |
 | | `upload_image`, `submit_workflow` | Build → Run |
 | | `get_result`, `get_image` (returns the actual image) | **Look** |
@@ -144,7 +145,8 @@ At handshake the server tells the agent *when to loop and when not to*:
 | `check_comfyui` | — | Node count + device/VRAM, or a clear "not reachable" message. Loop step 0. |
 | `list_nodes` | `keyword=""` | Nodes whose **class name or display name** matches (a strict superset of the skill's class-only search). Omit keyword for the count. |
 | `get_node` | `class_name`, `verbose=False` | One node's interface as **compact** `@Name +req:T ?opt:T -out:T` (~90% fewer tokens); `verbose=True` for full JSON (defaults, min/max). |
-| `list_models` | `class_name`, `input_name=""` | The real model files a loader offers, read from its enum — handles **both** the legacy list encoding and the newer `COMBO` encoding. Never hallucinate a filename. |
+| `list_models` | `class_name`, `input_name=""` | The real model files a loader offers **on disk** (ground truth), read from its enum — handles both the legacy list and `COMBO` encodings. Never hallucinate a filename. |
+| `search_models` | `keyword=""`, `model_type=""` | The downloadable model **catalog** (ComfyUI-Manager's list) — find checkpoints/LoRAs/VAEs/upscalers you may not have yet; each result flags whether it's already installed. Install with `install_model`. |
 | `search_templates` | `keyword=""`, `source="online"` | `online` (default): the full open catalog (`Comfy-Org/workflow_templates`, ~550), searched by name/title/description live from GitHub — no install. `installed`: only what's on this ComfyUI. |
 | `get_template` | `name`, `pack=""`, `source="online"`, `fmt="flowzip"` | Fetches a template. `fmt="flowzip"` (default) is compact FlowZip text (~85% smaller than raw litegraph JSON); `fmt="json"` for full litegraph. Either way it's litegraph — convert with `flowzip_to_api` before submitting. An online template may need nodes/models you lack — check with `find_missing_nodes`. |
 | `inflate_workflow` | `flowzip` | Expands FlowZip text back into full litegraph JSON. |
@@ -155,6 +157,7 @@ At handshake the server tells the agent *when to loop and when not to*:
 |---|---|---|
 | `find_missing_nodes` | `name`, `pack=""`, `source="online"` | Diffs a template's node classes (recursing into subgraphs) against `/object_info` and resolves each missing one to the pack that provides it. Read-only. |
 | `install_node_pack` | `pack_id`, `version="latest"` | Installs a pack via ComfyUI-Manager's queue (trusted registry, no arbitrary code). Then a restart is required. |
+| `install_model` | `name` | Downloads a catalog model (from `search_models`) into the right `models/<type>/` folder via Manager. No restart needed — verify with `list_models`. |
 | `restart_comfyui` | — | Restarts ComfyUI (via Manager) so new nodes register in `/object_info`. |
 
 **Build → Run → Look**

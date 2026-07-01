@@ -99,9 +99,12 @@ theirs — it's the combination, and we're positioned to build it:
   `requiresCustomNodes`/`models`/`usage` (already in the open catalog data);
   `run_template` with input overrides (run known-good graphs without loading the
   JSON); typed `list_nodes` filters. See the README/roadmap.
-- **The one real gap:** model *discovery + download*. Installing missing nodes but
-  not missing models is a half-repair. This is the highest-value repair addition —
-  and it must follow the same rule: pinned, verified against ground truth.
+- **Model *discovery + download* — now closed** (`search_models` + `install_model`).
+  Reads ComfyUI-Manager's model catalog (trusted, whitelisted source), flags what's
+  already installed (ground truth), and downloads into the right folder — no restart
+  (loaders re-scan). This was the half-repair gap; nodes AND models are now covered.
+  A broader source (HuggingFace/Civitai search, as the cloud does) remains a possible
+  extension, still subject to the pinned-and-verified rule.
 - **Don't chase:** becoming a cloud catalog or a `cql`-style graph query engine.
   Those are the cloud's game; they don't serve the local/loop identity.
 

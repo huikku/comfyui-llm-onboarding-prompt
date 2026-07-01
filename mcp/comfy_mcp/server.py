@@ -213,6 +213,50 @@ async def list_models(class_name: str, input_name: str = "") -> str:
     return f"Enum inputs on {class_name}:\n\n" + "\n\n".join(out) if out else f"{class_name} has no enum inputs."
 
 
+@mcp.tool()
+async def search_models(keyword: str = "", model_type: str = "") -> str:
+    """Search the downloadable model catalog — find checkpoints/LoRAs/VAEs/
+    controlnets/upscalers you may NOT have installed yet (the local equivalent of
+    the cloud's model search). Reads ComfyUI-Manager's model list; each result
+    shows whether it's already installed on THIS box.
+
+    Filter by keyword (name/filename/base/description) and optional model_type
+    (checkpoint, lora, vae, controlnet, upscale, clip, diffusion_model, ...).
+    Install one with install_model(name). Requires ComfyUI-Manager on the host.
+
+    This is a catalog of *known* models; list_models shows what a specific loader
+    currently offers on disk (ground truth). Discover here, then verify against
+    list_models after installing.
+    """
+    async with _client() as c:
+        r = await c.get("/externalmodel/getlist?mode=cache")
+    if r.status_code != 200:
+        return f"Model catalog unavailable (HTTP {r.status_code}). Needs ComfyUI-Manager on the host."
+    models = r.json().get("models", [])
+    kw, mt = keyword.lower().strip(), model_type.lower().strip()
+    hits = []
+    for m in models:
+        if mt and mt not in str(m.get("type", "")).lower():
+            continue
+        hay = " ".join(str(m.get(k, "")) for k in ("name", "filename", "base", "description")).lower()
+        if kw and kw not in hay:
+            continue
+        hits.append(m)
+    if not hits:
+        return (f"No catalog model matches (keyword={keyword!r}, type={model_type!r}) among "
+                f"{len(models)}. Broaden the search, or it may not be in Manager's list.")
+    lines = []
+    for m in hits[:40]:
+        flag = "installed" if str(m.get("installed", "")).lower() == "true" else "NOT installed"
+        lines.append(f"  {m.get('name')}  [{m.get('type')}/{m.get('base', '?')}]  "
+                     f"{m.get('filename')}  {m.get('size', '?')}  ({flag})")
+    more = "" if len(hits) <= 40 else f"\n  … (+{len(hits) - 40} more; narrow keyword/type)"
+    return (f"{len(hits)} of {len(models)} catalog models"
+            + (f" matching {keyword!r}" if kw else "") + (f" type={model_type}" if mt else "")
+            + ". Install with install_model(name), then verify with list_models:\n"
+            + "\n".join(lines) + more)
+
+
 def _flatten_index(cats: list[dict]) -> list[dict]:
     out: list[dict] = []
     for cat in cats:
@@ -545,6 +589,46 @@ async def install_node_pack(pack_id: str, version: str = "latest") -> str:
         f"Queued + processed install of '{pack_id}' (status: {json.dumps(status)[:200]}).\n"
         "RESTART REQUIRED: call restart_comfyui, then re-run find_missing_nodes / get_node to confirm "
         "the new nodes registered before building."
+    )
+
+
+@mcp.tool()
+async def install_model(name: str) -> str:
+    """Download a model from the catalog by its exact name (from search_models),
+    into the correct models/<type>/ folder, via ComfyUI-Manager.
+
+    Trusted catalog only — Manager whitelists the source. Unlike nodes, models do
+    NOT need a ComfyUI restart (loaders re-scan the folder); once it completes,
+    verify with list_models. Large models can take a while — the download
+    continues server-side even if this call's poll window ends.
+    """
+    import anyio
+
+    async with _client() as c:
+        catalog = (await c.get("/externalmodel/getlist?mode=cache")).json().get("models", [])
+        item = next((m for m in catalog if m.get("name") == name), None)
+        if not item:
+            return f"No catalog model named {name!r}. Use search_models for exact names."
+        if str(item.get("installed", "")).lower() == "true":
+            return f"'{name}' is already installed ({item.get('save_path')}/{item.get('filename')})."
+        r = await c.post("/manager/queue/install_model", json=item)
+        if r.status_code == 403:
+            return "Blocked by ComfyUI-Manager security level. Lower it, or download the model manually."
+        if r.status_code != 200:
+            return f"Model install request failed (HTTP {r.status_code}): {r.text[:200]}"
+        await c.post("/manager/queue/start")
+        status = {}
+        with anyio.move_on_after(600):
+            while True:
+                status = (await c.get("/manager/queue/status")).json()
+                if status.get("is_processing") is False and status.get("done_count", 0) >= status.get("total_count", 0):
+                    break
+                await anyio.sleep(3.0)
+    return (
+        f"Downloading '{name}' -> {item.get('save_path')}/{item.get('filename')} "
+        f"({item.get('size', '?')}; status: {json.dumps(status)[:150]}).\n"
+        "No restart needed for models — verify it's available with list_models "
+        "(re-run if a large download is still finishing server-side)."
     )
 
 
