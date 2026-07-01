@@ -121,7 +121,12 @@ Only if a human needs to edit it. Save to `user/default/workflows/<name>.json`. 
 `GET /object_info[/{node}]` (specs + model enums) · `POST /prompt` (queue+validate) · `GET /history/{id}` (results) · `GET /view?filename=&subfolder=&type=` (fetch output) · `POST /upload/image` · `GET /queue` · `POST /interrupt` · `GET /system_stats` (VRAM/device).
 
 ## Prefer adapting known-good graphs
-Knowing a node's interface ≠ knowing a correct wiring. Start from a working example (a node pack's `example_workflows/`, or a saved graph) and use `object_info` to validate/adapt. Few-shot from a real graph beats zero-shot from specs.
+Knowing a node's interface ≠ knowing a correct wiring. Start from a working example and use `object_info` to validate/adapt. Few-shot from a real graph beats zero-shot from specs. Where to get known-good graphs:
+- **The template catalog on your install** — `GET /api/workflow_templates` lists every template shipped by each installed node pack; fetch one with `GET /api/workflow_templates/<pack>/<name>.json`.
+- **The official online catalog** — the open `Comfy-Org/workflow_templates` repo (~550 workflows): index at `https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/index.json`, each graph at `.../templates/<name>.json`. No install needed to browse. An online template may reference nodes/models you don't have — reconcile against `object_info` and install as needed.
+- A node pack's `example_workflows/`, or any saved graph.
+
+These are **UI / litegraph** format — convert to API format (resolve passthroughs, `widgets_values` → named inputs via `object_info`) before executing.
 
 ## Common failures
 - Wrong node names (case-sensitive; differ from display names) — verify via API.

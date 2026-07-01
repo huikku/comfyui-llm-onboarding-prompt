@@ -63,7 +63,12 @@ Upload an input image first when needed: `curl -s -X POST http://localhost:8188/
 - **Install what you need.** If no installed node does the job, install the pack from a **trusted source** (ComfyUI-Manager, or the official / maintainer GitHub repo) into `custom_nodes/`, `pip install -r` its requirements, then **restart ComfyUI and re-query `/object_info`** so the new nodes register. Download missing model files into the correct `models/<type>/` folder. Don't install from sketchy / unvetted sources.
 - **Write a custom node when nothing fits.** Author a small Python node in `custom_nodes/` (`INPUT_TYPES` / `RETURN_TYPES` / `FUNCTION` / `NODE_CLASS_MAPPINGS`), restart, and use it — for a bespoke composite, a math/masking op, or glue between two nodes. Prefer an existing node first; reach for custom when the task genuinely needs it.
 
-**Adapt known-good graphs.** When a working example exists (a node pack's `example_workflows/`, a saved graph), start from it and adapt with `object_info` — few-shot beats zero-shot.
+**Adapt known-good graphs.** Few-shot from a working example beats zero-shot from specs. Sources:
+- **Template catalog on your install:** `GET /api/workflow_templates` (index), then `GET /api/workflow_templates/<pack>/<name>.json`.
+- **Official online catalog** (~550 workflows, no install to browse): index at `https://raw.githubusercontent.com/Comfy-Org/workflow_templates/main/templates/index.json`, each graph at `.../templates/<name>.json`. An online template may need nodes/models you lack — reconcile against `object_info` and install as needed.
+- A node pack's `example_workflows/`, or a saved graph.
+
+All of these are **UI / litegraph** format — convert to API format (resolve passthroughs, `widgets_values` → named inputs via `object_info`) before you POST to `/prompt`.
 
 ---
 
