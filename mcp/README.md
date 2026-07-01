@@ -39,6 +39,7 @@ built on opposite philosophies and are genuinely complementary.
 | **Privacy** | Nothing leaves your machine; works offline | Prompts + outputs go to the cloud |
 | **Nodes / models available** | Exactly what *you've installed* — custom nodes, private models, all reflected live via `/object_info` | The cloud catalog: `search_models`, `search_templates`, `search_nodes`, subgraph blueprints |
 | **Workflow templates** | ✓ `search_templates` / `get_template` over the **same open catalog** (`Comfy-Org/workflow_templates`, ~550, browsed live from GitHub — no install) **and** your install's own templates | ✓ over the cloud's copy of that catalog (plus any cloud-only additions) |
+| **Install missing nodes for a template** | ✓ `find_missing_nodes` + `install_node_pack` via ComfyUI-Manager on your host (then `restart_comfyui`) | ✓ handled cloud-side (the cloud already has the packs) |
 | **Building philosophy** | **Loop-first** — discover, build, run, then *iterate on the pixels* until a trained eye accepts it | **Template-first** — match a proven template, then run it |
 | **Quality-iteration discipline** | The whole point: look → critique → change one knob → re-run, enforced in tool docs/responses/instructions | Not the focus; optimized for "get a working result fast" |
 | **Workflow save / share / reproduce** | ✗ (you manage your own files) | ✓ `save_workflow`, `share_workflow`, `import_shared_workflow`, reproducibility tracking |
@@ -94,6 +95,7 @@ box, and let the agent pick per task.
 | Primitive | What it exposes | Loop step |
 |---|---|---|
 | **Tools** | `check_comfyui`, `list_nodes`, `get_node`, `list_models`, `search_templates`, `get_template` | Discover, don't guess |
+| | `find_missing_nodes`, `install_node_pack`, `restart_comfyui` | Extend (install what a template needs) |
 | | `upload_image`, `submit_workflow` | Build → Run |
 | | `get_result`, `get_image` (returns the actual image) | **Look** |
 | | `system_stats`, `get_queue`, `interrupt` | Control |
@@ -142,6 +144,13 @@ At handshake the server tells the agent *when to loop and when not to*:
 | `list_models` | `class_name`, `input_name=""` | The real model files a loader offers, read from its enum — handles **both** the legacy list encoding and the newer `COMBO` encoding. Never hallucinate a filename. |
 | `search_templates` | `keyword=""`, `source="online"` | `online` (default): the full open catalog (`Comfy-Org/workflow_templates`, ~550), searched by name/title/description live from GitHub — no install. `installed`: only what's on this ComfyUI. |
 | `get_template` | `name`, `pack=""`, `source="online"` | Fetches a template's JSON. It's **UI/litegraph format** — adapt to API format (resolve passthroughs, `widgets_values` → named inputs via `get_node`) before submitting. An online template may need nodes/models you haven't installed — verify against `list_nodes`/`list_models` first. |
+
+**Extend** (install what a template needs — requires [ComfyUI-Manager](https://github.com/Comfy-Org/ComfyUI-Manager) on the host)
+| Tool | Args | Returns |
+|---|---|---|
+| `find_missing_nodes` | `name`, `pack=""`, `source="online"` | Diffs a template's node classes (recursing into subgraphs) against `/object_info` and resolves each missing one to the pack that provides it. Read-only. |
+| `install_node_pack` | `pack_id`, `version="latest"` | Installs a pack via ComfyUI-Manager's queue (trusted registry, no arbitrary code). Then a restart is required. |
+| `restart_comfyui` | — | Restarts ComfyUI (via Manager) so new nodes register in `/object_info`. |
 
 **Build → Run → Look**
 | Tool | Args | Returns |
@@ -264,6 +273,14 @@ reachable across the network by default. Two options:
   **restart ComfyUI** so `/object_info` reflects it (the API is stale until then).
 - **`get_image` returns nothing** — make sure the graph has a `SaveImage` /
   `PreviewImage` node; `get_result` lists what was actually produced.
+- **`install_node_pack` blocked / no-op** — the install tools need
+  [ComfyUI-Manager](https://github.com/Comfy-Org/ComfyUI-Manager) on the host,
+  and Manager's security level must permit API installs. After installing,
+  `restart_comfyui` is required before `/object_info` shows the new nodes.
+- **`find_missing_nodes` picks the "wrong" pack** — several packs can export a
+  same-named node; resolution takes the first registry match. If an install
+  doesn't provide the class, check the reported pack and install the right one
+  explicitly.
 
 ## License
 

@@ -309,8 +309,161 @@ async def get_template(name: str, pack: str = "", source: str = "online") -> str
         return f"Template '{label}' did not return JSON."
     is_ui = isinstance(data, dict) and "nodes" in data and "links" in data
     fmt = "UI/litegraph — ADAPT to API format before submitting" if is_ui else "inspect before submitting"
-    warn = "" if source == "installed" else "\n(Online template: confirm required nodes/models are installed via list_nodes/list_models first.)"
+    warn = "" if source == "installed" else "\n(Online template: confirm required nodes/models are installed via list_nodes/list_models — or run find_missing_nodes then install_node_pack.)"
     return f"Template {label} — format: {fmt}{warn}\n\n" + json.dumps(data, indent=2)
+
+
+# --------------------------------------------------------------------------- #
+# EXTEND — install what a template needs (via ComfyUI-Manager, trusted registry)
+# --------------------------------------------------------------------------- #
+def _node_classes(workflow: Any) -> set[str]:
+    """Extract real node class names from either format.
+
+    API format: values keyed by node id, each with class_type.
+    Litegraph: top-level `nodes[].type`, PLUS nodes nested inside
+    `definitions.subgraphs[].nodes`. A subgraph *instance* has type == the
+    subgraph's id (a UUID) — those aren't installable classes, so exclude them
+    and descend into the definition instead.
+    """
+    classes: set[str] = set()
+    subgraph_ids: set[str] = set()
+    if isinstance(workflow, dict) and isinstance(workflow.get("nodes"), list):
+        for n in workflow["nodes"]:
+            if n.get("type"):
+                classes.add(n["type"])
+        for sg in workflow.get("definitions", {}).get("subgraphs", []):
+            if sg.get("id"):
+                subgraph_ids.add(sg["id"])
+            for n in sg.get("nodes", []):
+                if n.get("type"):
+                    classes.add(n["type"])
+    elif isinstance(workflow, dict):
+        for n in workflow.values():
+            if isinstance(n, dict) and n.get("class_type"):
+                classes.add(n["class_type"])
+    virtual = {"Note", "MarkdownNote", "Reroute", "PrimitiveNode", "Reroute (rgthree)"}
+    return {c for c in classes if c not in virtual and c not in subgraph_ids}
+
+
+@mcp.tool()
+async def find_missing_nodes(name: str = "", pack: str = "", source: str = "online") -> str:
+    """Diff a template's nodes against what's installed, and resolve each missing
+    node to the pack that provides it (via ComfyUI-Manager's registry mapping).
+
+    Fetches the template (same args as get_template), lists the node classes it
+    uses, subtracts what /object_info already has, and for each missing class
+    reports the installable pack id to pass to install_node_pack. Read-only.
+    """
+    # fetch template
+    if source == "installed":
+        if not pack:
+            return "source='installed' needs a pack."
+        url = f"/api/workflow_templates/{pack}/{name}.json"
+        async with _client() as c:
+            data = (await c.get(url)).json()
+    else:
+        async with httpx.AsyncClient(timeout=20.0) as c:
+            data = (await c.get(f"{_TPL_BASE}/templates/{name}.json")).json()
+    needed = _node_classes(data)
+    if not needed:
+        return f"Template '{name}' has no resolvable node classes."
+
+    async with _client() as c:
+        installed = set((await c.get("/object_info")).json())
+        mappings = (await c.get("/customnode/getmappings?mode=cache")).json()
+        catalog = (await c.get("/customnode/getlist?mode=cache")).json()
+    packs = catalog.get("node_packs", catalog) if isinstance(catalog, dict) else {}
+
+    missing = sorted(needed - installed)
+    if not missing:
+        return f"All {len(needed)} node classes in '{name}' are already installed. Ready to build/run."
+
+    # class -> source key (url or id) via getmappings
+    def resolve(cls: str) -> tuple[str, str] | None:
+        for src, val in mappings.items():
+            names = val[0] if isinstance(val, list) and val else []
+            if cls in names:
+                title = val[1].get("title_aux", src) if len(val) > 1 and isinstance(val[1], dict) else src
+                return src, title
+        return None
+
+    # source key -> installable CNR id via getlist (match id / reference / repository / files)
+    def to_pack_id(src: str) -> str | None:
+        if isinstance(packs, dict) and src in packs:
+            return src
+        if isinstance(packs, dict):
+            for pid, info in packs.items():
+                refs = {info.get("reference"), info.get("repository")} | set(info.get("files", []) or [])
+                if src in refs or src.rstrip("/") in {str(r).rstrip("/") for r in refs if r}:
+                    return pid
+        return None
+
+    lines, unresolved = [], []
+    for cls in missing:
+        r = resolve(cls)
+        if not r:
+            unresolved.append(cls)
+            continue
+        src, title = r
+        pid = to_pack_id(src)
+        if pid:
+            lines.append(f"  {cls}  ->  pack id '{pid}'  ({title})")
+        else:
+            lines.append(f"  {cls}  ->  {title}  [{src}] (not in CNR registry; install by git url)")
+    out = [f"{len(missing)} missing node class(es) in '{name}':", *lines]
+    if unresolved:
+        out.append("\nCould not resolve to a pack (search ComfyUI-Manager manually): " + ", ".join(unresolved))
+    out.append("\nInstall with install_node_pack(pack_id), then restart_comfyui, then re-check.")
+    return "\n".join(out)
+
+
+@mcp.tool()
+async def install_node_pack(pack_id: str, version: str = "latest") -> str:
+    """Install a custom-node pack by its ComfyUI-Manager registry id (from
+    find_missing_nodes) — trusted registry only, no arbitrary code.
+
+    Queues the install, starts the queue, and polls until done. A ComfyUI RESTART
+    is required afterward before /object_info reflects the new nodes — call
+    restart_comfyui, then re-query. Fails clearly if Manager's security level
+    blocks API installs.
+    """
+    import anyio
+
+    async with _client() as c:
+        payload = {"id": pack_id, "version": version, "selected_version": version, "skip_post_install": False}
+        r = await c.post("/manager/queue/install", json=payload)
+        if r.status_code == 403:
+            return ("Blocked by ComfyUI-Manager security level. Lower it (Manager settings) "
+                    "or install this pack manually on the ComfyUI host, then restart.")
+        if r.status_code != 200:
+            return f"Install request failed (HTTP {r.status_code}): {r.text[:300]}"
+        await c.post("/manager/queue/start")
+        status = {}
+        with anyio.move_on_after(180):
+            while True:
+                status = (await c.get("/manager/queue/status")).json()
+                if status.get("is_processing") is False and status.get("done_count", 0) >= status.get("total_count", 0):
+                    break
+                await anyio.sleep(2.0)
+    return (
+        f"Queued + processed install of '{pack_id}' (status: {json.dumps(status)[:200]}).\n"
+        "RESTART REQUIRED: call restart_comfyui, then re-run find_missing_nodes / get_node to confirm "
+        "the new nodes registered before building."
+    )
+
+
+@mcp.tool()
+async def restart_comfyui() -> str:
+    """Restart ComfyUI (via ComfyUI-Manager) so newly installed nodes register in
+    /object_info. The server is briefly unavailable; poll check_comfyui after.
+    """
+    try:
+        async with _client() as c:
+            await c.post("/manager/reboot")
+    except Exception:  # noqa: BLE001
+        pass  # the reboot drops the connection — expected
+    return ("Restart triggered. ComfyUI is coming back up — wait a few seconds, then call "
+            "check_comfyui to confirm it's live and the new nodes are registered.")
 
 
 # --------------------------------------------------------------------------- #
