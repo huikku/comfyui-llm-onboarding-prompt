@@ -1,15 +1,83 @@
 # comfy-mcp — a loop-aware MCP server for ComfyUI
 
-An [MCP](https://modelcontextprotocol.io) server that wraps a **local** ComfyUI
-install and bakes in the build→run→**look**→critique→fix loop from this repo.
-It doesn't just call the API — every tool description and response nudges the
-model through the loop: discover real nodes/models before building, validate by
-executing, and *actually look at the pixels* before deciding a graph is done.
-A graph that runs with zero `node_errors` is **valid, not correct**.
+An [MCP](https://modelcontextprotocol.io) server that wraps **your own** ComfyUI
+install and bakes in the build → run → **look** → critique → fix loop from this
+repo. It doesn't just call the API — every tool description, tool response, and
+the server's own instructions push the model through the loop: discover real
+nodes/models before building, validate by executing, and *actually look at the
+pixels* before deciding a graph is done. A graph that runs with zero
+`node_errors` is **valid, not correct**.
 
-> Complements ComfyUI's official **Comfy Cloud MCP** (`cloud.comfy.org/mcp`),
-> which runs workflows on Comfy Cloud GPUs. This one points at *your own*
-> ComfyUI (`http://localhost:8188`) and is single-sourced with the loop prompt.
+It is the repo's [`SKILL.md`](../SKILL.md) and
+[`COMFYUI_WORKFLOW_LOOP_PROMPT.md`](../COMFYUI_WORKFLOW_LOOP_PROMPT.md) **made
+executable** — the discovery tools are a direct port of the skill's steps, and
+the `comfy_loop` / `comfy_skill` prompts serve those files verbatim so they never
+drift.
+
+- [How it compares to ComfyUI's official Cloud MCP](#how-it-compares-to-comfyui-cloud-mcp) — the honest version
+- [The three MCP primitives](#the-three-mcp-primitives-mapped-to-the-loop)
+- [Tool reference](#tool-reference)
+- [Watch the loop actually work](#watch-the-loop-actually-work)
+- [Install & connect](#install)
+- [Pointing at a remote ComfyUI](#pointing-at-a-remote-comfyui)
+
+---
+
+## How it compares to ComfyUI Cloud MCP
+
+In the same week this was built, ComfyUI shipped an official **Comfy Cloud MCP**
+(`https://cloud.comfy.org/mcp`). They are **not the same kind of tool**, and the
+honest answer to "which is better?" is *it depends on what you're doing* — they're
+built on opposite philosophies and are genuinely complementary.
+
+| | **comfy-mcp** (this repo) | **Comfy Cloud MCP** (official) |
+|---|---|---|
+| **Runs on** | Your own ComfyUI — local box, or a remote one you own | Comfy Cloud GPUs |
+| **Hardware needed** | Your GPU (or CPU) | None — cloud does it |
+| **Cost** | Free (your electricity) | Comfy account, cloud compute (metered) |
+| **Account / signup** | None | Required |
+| **Privacy** | Nothing leaves your machine; works offline | Prompts + outputs go to the cloud |
+| **Nodes / models available** | Exactly what *you've installed* — custom nodes, private models, all reflected live via `/object_info` | The cloud catalog: `search_models`, `search_templates`, `search_nodes`, subgraph blueprints |
+| **Building philosophy** | **Loop-first** — discover, build, run, then *iterate on the pixels* until a trained eye accepts it | **Template-first** — match a proven template, then run it |
+| **Quality-iteration discipline** | The whole point: look → critique → change one knob → re-run, enforced in tool docs/responses/instructions | Not the focus; optimized for "get a working result fast" |
+| **Workflow save / share / reproduce** | ✗ (you manage your own files) | ✓ `save_workflow`, `share_workflow`, `import_shared_workflow`, reproducibility tracking |
+| **Job orchestration** | Basic (`submit`, `get_result`, `get_queue`, `interrupt`) | Mature (`get_job_status`, `use_previous_output`, `cancel_job`) |
+| **Maturity / support** | ~400 lines of hackable MIT Python, unmaintained hobby code | Production, built and maintained by the ComfyUI team |
+| **Transparency** | You can read and edit every line | Closed service |
+
+### Is ours actually "better"? — an honest take
+
+**No, not universally — and for many people the official one is the smarter
+choice.** If you don't own a GPU, want curated templates and a searchable model
+catalog you haven't downloaded, need to save/share/reproduce workflows, or just
+want a maintained product with support, **use the official Cloud MCP.** It's more
+capable, more polished, and backed by a real team. We can't compete on breadth,
+catalog, or maintenance.
+
+**Where this one genuinely wins:**
+- **It's yours.** Local, private, free, offline-capable. No account, nothing
+  uploaded, no metered GPU. Point it at hardware you already own.
+- **It sees *your* install.** Custom node packs and private/local models you've
+  downloaded show up live — the cloud catalog can't offer nodes you invented or
+  weights you can't upload.
+- **It's loop-first, not template-first.** The entire design is the
+  "the first result runs but a trained eye rejects it" workflow — mangled hands,
+  a drifted background, a hard matte edge, an over-strong effect. It *makes the
+  model look at the output and keep tuning one parameter at a time until it's
+  right*, and refuses to treat a green run as done. That discipline is the thing
+  the official one doesn't emphasize.
+- **It's transparent and hackable.** ~400 lines of MIT Python. Read it, fork it,
+  add a tool, change a nudge.
+
+**The clean rule of thumb:**
+> No GPU, want templates/catalog/sharing, want a maintained product → **Cloud MCP.**
+> Own the hardware, care about privacy/cost/custom-nodes, and want an agent that
+> *iterates on quality until the pixels are right* → **this one.**
+
+They also compose: run **both**, one pointed at the cloud and one at your local
+box, and let the agent pick per task.
+
+---
 
 ## The three MCP primitives, mapped to the loop
 
@@ -22,10 +90,68 @@ A graph that runs with zero `node_errors` is **valid, not correct**.
 | **Prompts** | `comfy_loop` (full method), `comfy_skill` (compact) | The whole discipline, one command |
 | **Resources** | `comfyui://object_info` (live), `comfyui://loop-method`, `comfyui://skill` | Truth + docs |
 
-`get_image` returns the rendered output *to the model* — that's the step that
-makes the loop real. And tool responses actively push the loop: `submit_workflow`
-returning cleanly says "valid, not correct — now LOOK"; a rejection says "not an
-iteration — fix the named node and re-submit."
+Three things make it *loop-aware* rather than a plain API wrapper:
+
+1. **`get_image` returns the rendered output to the model** — that's the step
+   that makes "look" real. The model literally sees the pixels.
+2. **Tool responses push the loop.** `submit_workflow` on success says
+   *"valid, not correct — now LOOK"*; on a rejection it says *"not an iteration —
+   fix the named node and re-submit."* `get_result` ends with a directive:
+   *"do not stop here — LOOK, then change one parameter or declare the brief met."*
+3. **The server instructions carry a prefer-looping policy** (see below) that the
+   client injects at connect time.
+
+### The prefer-looping policy (server instructions)
+
+At handshake the server tells the agent *when to loop and when not to*:
+
+- **ALWAYS** discover from the live API before writing JSON; validate by
+  executing; `node_errors` are not iterations — fix and re-submit.
+- **PREFER LOOPING** whenever a trained eye could reject the output — composition/
+  count, likeness, matte/edge quality, upscale/restore, relight, texture seams,
+  video temporal stability, "make it look right."
+- **SKIP** the loop only for mechanical tasks (format conversion, a pure API
+  query, or when the user explicitly wants just a runnable graph).
+- **When unsure**, do at least one look-and-critique pass before declaring done.
+
+> MCP can't *force* behavior — it exposes capabilities and guidance. This makes
+> looping the strong, well-scoped default the agent is repeatedly told to prefer.
+> For a hard guarantee in Claude Code, also install the auto-loading
+> [`SKILL.md`](../SKILL.md) — skill = always-on discipline, MCP = the tools it drives.
+
+---
+
+## Tool reference
+
+**Discover**
+| Tool | Args | Returns |
+|---|---|---|
+| `check_comfyui` | — | Node count + device/VRAM, or a clear "not reachable" message. Loop step 0. |
+| `list_nodes` | `keyword=""` | Nodes whose **class name or display name** matches (a strict superset of the skill's class-only search). Omit keyword for the count. |
+| `get_node` | `class_name` | One node's exact interface: required/optional inputs (type, default, min/max), output types/names, category. |
+| `list_models` | `class_name`, `input_name=""` | The real model files a loader offers, read from its enum — handles **both** the legacy list encoding and the newer `COMBO` encoding. Never hallucinate a filename. |
+
+**Build → Run → Look**
+| Tool | Args | Returns |
+|---|---|---|
+| `upload_image` | `path`, `overwrite=True` | Uploads a local image to ComfyUI's `input/` dir; returns the name to reference in a `LoadImage` node. |
+| `submit_workflow` | `workflow` (API-format dict), `client_id` | On success: `prompt_id` + a "now LOOK" nudge. On failure: `node_errors` + a "fix that node, re-submit" nudge. |
+| `get_result` | `prompt_id`, `timeout_s=120` | Polls `/history`; returns each output's `filename`/`subfolder`/`type` + a directive to look and iterate. |
+| `get_image` | `filename`, `subfolder=""`, `image_type="output"` | The **actual image**, returned to the model so it can judge the pixels. |
+
+**Control**
+| Tool | Args | Returns |
+|---|---|---|
+| `system_stats` | — | Device / VRAM (useful when tuning resolution/batch or after an OOM). |
+| `get_queue` | — | What's running and pending. |
+| `interrupt` | — | Cancels the current run. |
+
+**Prompts:** `comfy_loop` (full autonomous method), `comfy_skill` (compact skill) —
+both served verbatim from the repo's markdown.
+**Resources:** `comfyui://object_info` (live full dump), `comfyui://loop-method`,
+`comfyui://skill`.
+
+---
 
 ## Watch the loop actually work
 
@@ -50,6 +176,8 @@ pass 2 is not the best image** — its score was inflated by background texture,
 not apple detail. The winner (pass 4) was chosen by *looking*. A green number is
 *valid, not correct*. ([example_apple.png](example_apple.png) is that pass-4 result.)
 
+---
+
 ## Install
 
 ```bash
@@ -57,13 +185,16 @@ cd mcp
 pip install -e .            # or: uv pip install -e .
 ```
 
+Requires Python ≥ 3.10 and a reachable ComfyUI. Installs `mcp[cli]`, `httpx`,
+`anyio`.
+
 ## Connect (Claude Code)
 
 ```bash
 claude mcp add comfyui -- comfy-mcp
 ```
 
-Or wire it manually in your MCP client config:
+Or wire it manually in any MCP client config:
 
 ```json
 {
@@ -83,13 +214,43 @@ Or wire it manually in your MCP client config:
 | `COMFYUI_URL` | `http://localhost:8188` | Your ComfyUI server |
 | `COMFYUI_ONBOARDING_DIR` | repo root above this package | Where the `comfy_loop` / `comfy_skill` prompts read their markdown |
 
+## Pointing at a remote ComfyUI
+
+ComfyUI usually binds to `127.0.0.1`, so a ComfyUI on another machine isn't
+reachable across the network by default. Two options:
+
+- **SSH tunnel (simplest, keeps ComfyUI private):** forward the port, then leave
+  `COMFYUI_URL` at localhost:
+  ```bash
+  ssh -N -L 8188:localhost:8188 your-remote-host
+  # COMFYUI_URL stays http://localhost:8188
+  ```
+- **Bind ComfyUI to the network** and point at it directly (only on a trusted
+  network — this exposes an unauthenticated API):
+  ```bash
+  python main.py --listen 0.0.0.0 --port 8188
+  # COMFYUI_URL=http://<remote-ip>:8188
+  ```
+
 ## Use it
 
 1. In your agent, load the **`comfy_loop`** prompt (or let it read the
-   `comfyui://loop-method` resource) to pull in the method.
+   `comfyui://loop-method` resource) to pull in the full method. If your client
+   injects server instructions, the prefer-looping policy is already active.
 2. Give it a goal. It will `check_comfyui` → `list_nodes` / `get_node` /
-   `list_models` → build API-format JSON → `submit_workflow` →
-   `get_result` → `get_image`, then critique and iterate.
+   `list_models` → build API-format JSON → `submit_workflow` → `get_result` →
+   `get_image`, then critique and iterate — one change per pass — until it can't
+   name a defect, then present the result for sign-off.
+
+## Troubleshooting
+
+- **"ComfyUI is NOT reachable"** — it isn't running, is on another port, or (for
+  a remote box) needs a tunnel. Check `COMFYUI_URL`; `check_comfyui` reports the
+  exact URL it tried.
+- **Node/model not found** — install the pack/model on the ComfyUI side, then
+  **restart ComfyUI** so `/object_info` reflects it (the API is stale until then).
+- **`get_image` returns nothing** — make sure the graph has a `SaveImage` /
+  `PreviewImage` node; `get_result` lists what was actually produced.
 
 ## License
 
