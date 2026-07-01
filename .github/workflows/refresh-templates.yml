@@ -1,0 +1,38 @@
+name: Refresh template catalog
+
+# Regenerates the compressed template-catalog snapshot bundled with comfy-mcp
+# (mcp/comfy_mcp/data/templates_index.json.gz) from Comfy-Org/workflow_templates,
+# and commits it if it changed. Keeps the offline/fast catalog current.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # every Monday 06:00 UTC
+  workflow_dispatch: {}    # manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Rebuild template index
+        run: python mcp/scripts/build_template_index.py --ref main
+
+      - name: Commit if changed
+        run: |
+          if [[ -n "$(git status --porcelain mcp/comfy_mcp/data/templates_index.json.gz)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add mcp/comfy_mcp/data/templates_index.json.gz
+            git commit -m "chore: refresh template catalog snapshot"
+            git push
+          else
+            echo "No change to the template catalog."
+          fi

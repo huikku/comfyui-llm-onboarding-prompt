@@ -17,6 +17,7 @@ Config via env:
 
 from __future__ import annotations
 
+import gzip
 import json
 import os
 from pathlib import Path
@@ -212,10 +213,7 @@ async def list_models(class_name: str, input_name: str = "") -> str:
     return f"Enum inputs on {class_name}:\n\n" + "\n\n".join(out) if out else f"{class_name} has no enum inputs."
 
 
-async def _online_index() -> list[dict]:
-    """Flatten the official template catalog's index.json into {name,title,description}."""
-    async with httpx.AsyncClient(timeout=20.0) as c:
-        cats = (await c.get(f"{_TPL_BASE}/templates/index.json")).json()
+def _flatten_index(cats: list[dict]) -> list[dict]:
     out: list[dict] = []
     for cat in cats:
         title = cat.get("title", cat.get("moduleName", ""))
@@ -229,6 +227,42 @@ async def _online_index() -> list[dict]:
                 }
             )
     return out
+
+
+def _bundled_index() -> list[dict]:
+    """The compressed catalog snapshot shipped with the package (fast, offline).
+    Refreshed by scripts/build_template_index.py (run weekly by a GitHub Action)."""
+    path = Path(__file__).parent / "data" / "templates_index.json.gz"
+    with gzip.open(path, "rt", encoding="utf-8") as f:
+        return json.load(f).get("templates", [])
+
+
+_TPL_INDEX_CACHE: list[dict] | None = None
+
+
+async def _online_index() -> list[dict]:
+    """The template catalog, cached per process.
+
+    Prefers the bundled compressed snapshot (instant, offline, no 566 KB fetch).
+    Set COMFYUI_TEMPLATES_LIVE=1 to fetch the freshest index from GitHub instead;
+    that also serves as the fallback if the snapshot is missing.
+    """
+    global _TPL_INDEX_CACHE
+    if _TPL_INDEX_CACHE is not None:
+        return _TPL_INDEX_CACHE
+    if os.environ.get("COMFYUI_TEMPLATES_LIVE") != "1":
+        try:
+            _TPL_INDEX_CACHE = _bundled_index()
+            return _TPL_INDEX_CACHE
+        except Exception:  # noqa: BLE001
+            pass  # snapshot missing -> fetch live
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as c:
+            cats = (await c.get(f"{_TPL_BASE}/templates/index.json")).json()
+        _TPL_INDEX_CACHE = _flatten_index(cats)
+    except Exception:  # noqa: BLE001
+        _TPL_INDEX_CACHE = _bundled_index()
+    return _TPL_INDEX_CACHE
 
 
 @mcp.tool()
