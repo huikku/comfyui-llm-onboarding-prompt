@@ -25,6 +25,13 @@ from typing import Any
 import httpx
 from mcp.server.fastmcp import FastMCP, Image
 
+from .compress import (
+    _NODE_LEGEND,
+    compact_node,
+    flowzip_deflate,
+    flowzip_inflate,
+)
+
 COMFY_URL = os.environ.get("COMFYUI_URL", "http://localhost:8188").rstrip("/")
 
 # The official, open template catalog — the same repo the Cloud MCP's template
@@ -156,18 +163,22 @@ async def list_nodes(keyword: str = "") -> str:
 
 
 @mcp.tool()
-async def get_node(class_name: str) -> str:
-    """Get one node's exact interface: required/optional inputs (type, default,
-    min/max), output types, output names, category.
+async def get_node(class_name: str, verbose: bool = False) -> str:
+    """Get one node's interface: inputs (required +, optional ?) and outputs (-).
 
-    Use this to get input names and output indices RIGHT before wiring a node —
-    never guess input names or which output index carries which type.
-    """
+    Default is COMPACT notation — `@Name +req:T ?opt:T -out:T` (type codes:
+    {legend}) — ~90% fewer tokens than raw JSON, enough to wire the node
+    correctly. Pass verbose=True for the full JSON (defaults, min/max, tooltips)
+    when you need exact widget ranges.
+    """.replace("{legend}", _NODE_LEGEND)
     async with _client() as c:
         r = await c.get(f"/object_info/{class_name}")
     if r.status_code != 200 or not r.json():
         return f"No node class '{class_name}'. Use list_nodes to find the correct case-sensitive class name."
-    return json.dumps(r.json().get(class_name, r.json()), indent=2)
+    spec = r.json().get(class_name, r.json())
+    if verbose:
+        return json.dumps(spec, indent=2)
+    return f"# {_NODE_LEGEND}\n{compact_node(class_name, spec)}"
 
 
 @mcp.tool()
@@ -277,19 +288,20 @@ async def search_templates(keyword: str = "", source: str = "online") -> str:
 
 
 @mcp.tool()
-async def get_template(name: str, pack: str = "", source: str = "online") -> str:
+async def get_template(name: str, pack: str = "", source: str = "online", fmt: str = "flowzip") -> str:
     """Fetch one workflow template as a known-good starting point.
 
     source="online" (default): from the official GitHub catalog — no install
-    needed; `pack` is ignored (online templates are flat by name).
-    source="installed": from this ComfyUI (`pack` required — the node pack).
+    needed; `pack` is ignored. source="installed": from this ComfyUI (`pack`
+    required).
 
-    Templates are UI / litegraph format (nodes + links), NOT the API/prompt format
-    submit_workflow needs. To run in the loop: adapt to API format (resolve
-    reroute/GetNode/SetNode passthroughs, turn widgets_values into named inputs via
-    get_node). If from the online catalog, first check it doesn't rely on nodes/
-    models you lack — verify against list_nodes / list_models and install or
-    substitute as needed.
+    fmt="flowzip" (default): compact FlowZip text — ~85% fewer tokens than the raw
+    litegraph JSON, enough to read/adapt the graph. fmt="json": the full litegraph.
+    Either way it's litegraph, NOT the API/prompt format submit_workflow needs —
+    adapt to API (resolve passthroughs, widgets_values -> named inputs via
+    get_node), or inflate a FlowZip with inflate_workflow. If from the online
+    catalog, first confirm you have its nodes/models — run find_missing_nodes then
+    install_node_pack, or verify with list_nodes/list_models.
     """
     if source == "installed":
         if not pack:
@@ -308,9 +320,29 @@ async def get_template(name: str, pack: str = "", source: str = "online") -> str
     except Exception:  # noqa: BLE001
         return f"Template '{label}' did not return JSON."
     is_ui = isinstance(data, dict) and "nodes" in data and "links" in data
-    fmt = "UI/litegraph — ADAPT to API format before submitting" if is_ui else "inspect before submitting"
-    warn = "" if source == "installed" else "\n(Online template: confirm required nodes/models are installed via list_nodes/list_models — or run find_missing_nodes then install_node_pack.)"
-    return f"Template {label} — format: {fmt}{warn}\n\n" + json.dumps(data, indent=2)
+    hint = "" if source == "installed" else " (confirm nodes/models via find_missing_nodes)"
+    if fmt == "flowzip" and is_ui:
+        return (
+            f"Template {label} — FlowZip (litegraph; inflate_workflow to expand, "
+            f"then adapt to API to run){hint}\n\n{flowzip_deflate(data)}"
+        )
+    kind = "litegraph — adapt to API before submitting" if is_ui else "inspect before submitting"
+    return f"Template {label} — {kind}{hint}\n\n" + json.dumps(data, indent=2)
+
+
+@mcp.tool()
+async def inflate_workflow(flowzip: str) -> str:
+    """Expand FlowZip text back into a full litegraph workflow JSON.
+
+    Reverse of the FlowZip that get_template returns. Structure (nodes, types,
+    links, widget values) is preserved; cosmetic fields are not. To RUN it, still
+    adapt the litegraph to API/prompt format for submit_workflow.
+    """
+    try:
+        wf = flowzip_inflate(flowzip)
+    except Exception as e:  # noqa: BLE001
+        return f"Could not parse FlowZip: {e}"
+    return json.dumps(wf, indent=2)
 
 
 # --------------------------------------------------------------------------- #
