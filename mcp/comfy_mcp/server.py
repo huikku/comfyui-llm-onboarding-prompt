@@ -30,6 +30,7 @@ from .compress import (
     compact_node,
     flowzip_deflate,
     flowzip_inflate,
+    litegraph_to_api,
 )
 
 COMFY_URL = os.environ.get("COMFYUI_URL", "http://localhost:8188").rstrip("/")
@@ -343,6 +344,35 @@ async def inflate_workflow(flowzip: str) -> str:
     except Exception as e:  # noqa: BLE001
         return f"Could not parse FlowZip: {e}"
     return json.dumps(wf, indent=2)
+
+
+@mcp.tool()
+async def flowzip_to_api(flowzip: str) -> str:
+    """Convert FlowZip (or litegraph) into API/prompt format ready for submit_workflow.
+
+    Inflates FlowZip if needed, then maps the litegraph to the flat API graph using
+    the live object_info (resolves links, maps widget values to named inputs). This
+    is the bridge for authoring/adapting graphs compactly and running them.
+
+    Best-effort: subgraph instances and unknown nodes are skipped and reported;
+    widget drift between an old template and a newer node shows up as a
+    node_errors when you submit_workflow the result — read it, fix that node,
+    re-submit. Review the API graph before running.
+    """
+    text = flowzip.strip()
+    try:
+        wf = flowzip_inflate(text) if not text.startswith("{") else json.loads(text)
+    except Exception as e:  # noqa: BLE001
+        return f"Could not parse input: {e}"
+    async with _client() as c:
+        oi = (await c.get("/object_info")).json()
+    api, warnings = litegraph_to_api(wf, oi)
+    note = ("\n\nSkipped (handle manually): " + "; ".join(warnings)) if warnings else ""
+    return (
+        f"API/prompt format ({len(api)} nodes). Review, then submit_workflow. "
+        "A green run is valid, not correct — LOOK at the output." + note
+        + "\n\n" + json.dumps(api, indent=2)
+    )
 
 
 # --------------------------------------------------------------------------- #

@@ -16,7 +16,6 @@ things); don't cross them.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 # --------------------------------------------------------------------------- #
@@ -140,6 +139,80 @@ def flowzip_deflate(wf: dict) -> str:
         code = _FZ_CODE.get(ty, ty or "*")
         lines.append(f"L{lid}:{fn}.{fs}->{tn}.{ts}:{code}")
     return "\n".join(lines)
+
+
+_WIDGET_TYPES = {"INT", "FLOAT", "STRING", "BOOLEAN"}
+
+
+def _is_widget_type(t: Any) -> bool:
+    return isinstance(t, list) or t == "COMBO" or (isinstance(t, str) and t in _WIDGET_TYPES)
+
+
+def _coerce(value: Any, itype: Any) -> Any:
+    """Coerce a widget value to the type object_info declares.
+
+    FlowZip stores widget values as text, so a round-tripped INT arrives as
+    "512"; ComfyUI wants 512. Enum/STRING values pass through untouched.
+    """
+    if not isinstance(itype, str):
+        return value  # enum/list -> keep as-is
+    try:
+        if itype == "INT":
+            return int(float(value))
+        if itype == "FLOAT":
+            return float(value)
+        if itype == "BOOLEAN":
+            return value if isinstance(value, bool) else str(value).strip().lower() in {"true", "1"}
+    except (ValueError, TypeError):
+        return value
+    return value
+
+
+def litegraph_to_api(wf: dict, object_info: dict) -> tuple[dict, list[str]]:
+    """Best-effort litegraph -> API/prompt format using object_info.
+
+    Resolves links to [from_node_id, slot] and maps positional widgets_values to
+    their named inputs in object_info order (handling seed's extra
+    control_after_generate value). Returns (api_graph, warnings). Subgraph
+    instances and unknown nodes are skipped and reported — the loop's node_errors
+    is the safety net; treat the result as a draft to validate by executing.
+    """
+    link_src = {lk[0]: [str(lk[1]), lk[2]] for lk in wf.get("links", []) if lk}
+    subgraph_ids = {sg.get("id") for sg in wf.get("definitions", {}).get("subgraphs", [])}
+    api: dict[str, Any] = {}
+    warnings: list[str] = []
+    for n in wf.get("nodes", []):
+        ntype = n.get("type")
+        if ntype in subgraph_ids:
+            warnings.append(f"{ntype} (subgraph — not expanded)")
+            continue
+        if ntype not in object_info:
+            if ntype not in {"Note", "MarkdownNote", "Reroute", "PrimitiveNode"}:
+                warnings.append(f"{ntype} (unknown node)")
+            continue
+        spec = object_info[ntype].get("input", {})
+        ordered = list((spec.get("required") or {}).items()) + list((spec.get("optional") or {}).items())
+        conn = {
+            inp["name"]: link_src[inp["link"]]
+            for inp in (n.get("inputs") or [])
+            if inp.get("link") is not None and inp.get("link") in link_src
+        }
+        widgets = list(n.get("widgets_values") or [])
+        inputs: dict[str, Any] = {}
+        wi = 0
+        for iname, ispec in ordered:
+            if iname in conn:
+                inputs[iname] = conn[iname]
+                continue
+            itype = ispec[0] if isinstance(ispec, list) and ispec else ispec
+            if _is_widget_type(itype) and wi < len(widgets):
+                inputs[iname] = _coerce(widgets[wi], itype)
+                wi += 1
+                opts = ispec[1] if isinstance(ispec, list) and len(ispec) > 1 and isinstance(ispec[1], dict) else {}
+                if (opts.get("control_after_generate") or iname in {"seed", "noise_seed"}) and wi < len(widgets):
+                    wi += 1  # skip the control_after_generate value litegraph stores
+        api[str(n.get("id"))] = {"class_type": ntype, "inputs": inputs}
+    return api, warnings
 
 
 def flowzip_inflate(text: str) -> dict:
