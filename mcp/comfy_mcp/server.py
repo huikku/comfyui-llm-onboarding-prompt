@@ -27,6 +27,13 @@ from mcp.server.fastmcp import FastMCP, Image
 
 COMFY_URL = os.environ.get("COMFYUI_URL", "http://localhost:8188").rstrip("/")
 
+# The official, open template catalog — the same repo the Cloud MCP's template
+# search is built from. Lets us browse/fetch all ~500 templates WITHOUT installing
+# them, straight from GitHub. Override the ref with COMFYUI_TEMPLATES_REF.
+_TPL_REPO = "https://raw.githubusercontent.com/Comfy-Org/workflow_templates"
+_TPL_REF = os.environ.get("COMFYUI_TEMPLATES_REF", "main")
+_TPL_BASE = f"{_TPL_REPO}/{_TPL_REF}"
+
 # The loop/skill docs are single-sourced from the repo so the MCP prompts never
 # drift from the pasteable prompts. Override the dir if the server is installed
 # away from the repo.
@@ -193,60 +200,117 @@ async def list_models(class_name: str, input_name: str = "") -> str:
     return f"Enum inputs on {class_name}:\n\n" + "\n\n".join(out) if out else f"{class_name} has no enum inputs."
 
 
+async def _online_index() -> list[dict]:
+    """Flatten the official template catalog's index.json into {name,title,description}."""
+    async with httpx.AsyncClient(timeout=20.0) as c:
+        cats = (await c.get(f"{_TPL_BASE}/templates/index.json")).json()
+    out: list[dict] = []
+    for cat in cats:
+        title = cat.get("title", cat.get("moduleName", ""))
+        for t in cat.get("templates", []):
+            out.append(
+                {
+                    "name": t.get("name", ""),
+                    "title": t.get("title", ""),
+                    "description": t.get("description", ""),
+                    "category": title,
+                }
+            )
+    return out
+
+
 @mcp.tool()
-async def search_templates(keyword: str = "") -> str:
-    """Search the known-good workflow templates installed on THIS ComfyUI.
+async def search_templates(keyword: str = "", source: str = "online") -> str:
+    """Search known-good workflow templates to adapt (few-shot beats zero-shot).
 
-    ComfyUI's own /api/workflow_templates index — the local equivalent of the
-    Cloud MCP's template search. It aggregates the example workflows shipped by
-    every installed node pack (and core templates), so it reflects exactly what
-    your install can run. Matches the keyword against pack name and template name;
-    omit it to list everything.
+    source="online" (default): the OFFICIAL open catalog on GitHub
+    (Comfy-Org/workflow_templates) — the same ~500-template set the Cloud MCP's
+    search is built from. You do NOT need these installed; they're browsed
+    straight from the repo. Matches keyword against name + title + description.
 
-    Adapting a known-good template beats building zero-shot from specs — fetch one
-    with get_template, then adapt it to API format for the loop.
+    source="installed": only templates on THIS ComfyUI right now
+    (/api/workflow_templates — every installed pack's example workflows). Smaller,
+    but guaranteed runnable on your install without adding anything.
+
+    Then fetch one with get_template. Note an online template may reference nodes/
+    models you haven't installed — reconcile against object_info before running.
     """
-    async with _client() as c:
-        idx: dict[str, list[str]] = (await c.get("/api/workflow_templates")).json()
     kw = keyword.lower().strip()
-    total = sum(len(v) for v in idx.values())
-    lines: list[str] = []
-    for pack in sorted(idx):
-        names = idx[pack]
-        hits = [n for n in names if not kw or kw in n.lower() or kw in pack.lower()]
-        if hits:
-            lines.append(f"{pack}:")
-            lines.extend(f"  {n}" for n in hits)
-    if not lines:
-        return f"No template matches '{keyword}' among {total} templates in {len(idx)} packs. Try a broader keyword or omit it."
-    head = (
-        f"{total} templates in {len(idx)} packs"
-        + (f" — matching '{keyword}'" if kw else "")
-        + ". Fetch one with get_template(pack, name):\n"
+    if source == "installed":
+        async with _client() as c:
+            idx: dict[str, list[str]] = (await c.get("/api/workflow_templates")).json()
+        total = sum(len(v) for v in idx.values())
+        lines: list[str] = []
+        for pack in sorted(idx):
+            hits = [n for n in idx[pack] if not kw or kw in n.lower() or kw in pack.lower()]
+            if hits:
+                lines.append(f"{pack}:")
+                lines.extend(f"  {n}" for n in hits)
+        if not lines:
+            return f"No installed template matches '{keyword}' among {total} in {len(idx)} packs. Try source='online' for the full catalog."
+        return (
+            f"{total} installed templates in {len(idx)} packs"
+            + (f" — matching '{keyword}'" if kw else "")
+            + ". Fetch with get_template(pack, name, source='installed'):\n"
+            + "\n".join(lines)
+        )
+
+    # online catalog
+    try:
+        entries = await _online_index()
+    except Exception as e:  # noqa: BLE001
+        return f"Could not reach the online template catalog ({e}). Try source='installed'."
+    hits = [
+        e for e in entries
+        if not kw or kw in e["name"].lower() or kw in e["title"].lower() or kw in e["description"].lower()
+    ]
+    if not hits:
+        return f"No template in the online catalog ({len(entries)} total) matches '{keyword}'. Try a broader keyword."
+    lines = [f"  {e['name']}  —  {e['title']}  [{e['category']}]" for e in hits[:60]]
+    more = "" if len(hits) <= 60 else f"\n  … (+{len(hits) - 60} more; narrow the keyword)"
+    return (
+        f"{len(hits)} of {len(entries)} online catalog templates"
+        + (f" matching '{keyword}'" if kw else "")
+        + ". Fetch with get_template(name=<name>, source='online'):\n"
+        + "\n".join(lines) + more
     )
-    return head + "\n".join(lines)
 
 
 @mcp.tool()
-async def get_template(pack: str, name: str) -> str:
-    """Fetch one installed workflow template as a known-good starting point.
+async def get_template(name: str, pack: str = "", source: str = "online") -> str:
+    """Fetch one workflow template as a known-good starting point.
 
-    Returns the template JSON. NOTE: templates are in UI / litegraph format
-    (nodes + links arrays), NOT the API/prompt format submit_workflow needs.
-    To run it in the loop, adapt it to API format — resolve reroute/GetNode/SetNode
-    passthroughs and turn widgets_values into named inputs using get_node — then
-    submit. Few-shot from this real graph beats zero-shot from specs.
+    source="online" (default): from the official GitHub catalog — no install
+    needed; `pack` is ignored (online templates are flat by name).
+    source="installed": from this ComfyUI (`pack` required — the node pack).
+
+    Templates are UI / litegraph format (nodes + links), NOT the API/prompt format
+    submit_workflow needs. To run in the loop: adapt to API format (resolve
+    reroute/GetNode/SetNode passthroughs, turn widgets_values into named inputs via
+    get_node). If from the online catalog, first check it doesn't rely on nodes/
+    models you lack — verify against list_nodes / list_models and install or
+    substitute as needed.
     """
-    async with _client() as c:
-        r = await c.get(f"/api/workflow_templates/{pack}/{name}.json")
+    if source == "installed":
+        if not pack:
+            return "source='installed' needs a pack. Use search_templates(source='installed') for valid pack/name pairs."
+        async with _client() as c:
+            r = await c.get(f"/api/workflow_templates/{pack}/{name}.json")
+        label = f"{pack}/{name} (installed)"
+    else:
+        async with httpx.AsyncClient(timeout=20.0) as c:
+            r = await c.get(f"{_TPL_BASE}/templates/{name}.json")
+        label = f"{name} (online catalog)"
     if r.status_code != 200:
-        return f"No template '{name}' in pack '{pack}' (HTTP {r.status_code}). Use search_templates to list valid pack/name pairs."
+        return f"No template '{name}' (HTTP {r.status_code}). Use search_templates to list valid names."
     try:
         data = r.json()
     except Exception:  # noqa: BLE001
-        return f"Template '{pack}/{name}' did not return JSON."
-    fmt = "UI/litegraph (adapt to API format before submitting)" if "nodes" in data and "links" in data else "unknown — inspect before submitting"
-    return f"Template {pack}/{name} — format: {fmt}\n\n" + json.dumps(data, indent=2)
+        return f"Template '{label}' did not return JSON."
+    is_ui = isinstance(data, dict) and "nodes" in data and "links" in data
+    fmt = "UI/litegraph — ADAPT to API format before submitting" if is_ui else "inspect before submitting"
+    warn = "" if source == "installed" else "\n(Online template: confirm required nodes/models are installed via list_nodes/list_models first.)"
+    return f"Template {label} — format: {fmt}{warn}\n\n" + json.dumps(data, indent=2)
 
 
 # --------------------------------------------------------------------------- #
