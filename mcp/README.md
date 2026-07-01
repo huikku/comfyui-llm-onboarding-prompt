@@ -38,6 +38,7 @@ built on opposite philosophies and are genuinely complementary.
 | **Account / signup** | None | Required |
 | **Privacy** | Nothing leaves your machine; works offline | Prompts + outputs go to the cloud |
 | **Nodes / models available** | Exactly what *you've installed* — custom nodes, private models, all reflected live via `/object_info` | The cloud catalog: `search_models`, `search_templates`, `search_nodes`, subgraph blueprints |
+| **Workflow templates** | ✓ `search_templates` / `get_template` over **your install's** templates (ComfyUI's `/api/workflow_templates` — every installed pack's example workflows) | ✓ over the **cloud catalog** (broader; includes templates you haven't installed) |
 | **Building philosophy** | **Loop-first** — discover, build, run, then *iterate on the pixels* until a trained eye accepts it | **Template-first** — match a proven template, then run it |
 | **Quality-iteration discipline** | The whole point: look → critique → change one knob → re-run, enforced in tool docs/responses/instructions | Not the focus; optimized for "get a working result fast" |
 | **Workflow save / share / reproduce** | ✗ (you manage your own files) | ✓ `save_workflow`, `share_workflow`, `import_shared_workflow`, reproducibility tracking |
@@ -48,11 +49,16 @@ built on opposite philosophies and are genuinely complementary.
 ### Is ours actually "better"? — an honest take
 
 **No, not universally — and for many people the official one is the smarter
-choice.** If you don't own a GPU, want curated templates and a searchable model
-catalog you haven't downloaded, need to save/share/reproduce workflows, or just
-want a maintained product with support, **use the official Cloud MCP.** It's more
-capable, more polished, and backed by a real team. We can't compete on breadth,
-catalog, or maintenance.
+choice.** If you don't own a GPU, want a searchable *catalog* of models and
+templates you *haven't* installed, need to save/share/reproduce workflows, or
+just want a maintained product with support, **use the official Cloud MCP.** It's
+more capable, more polished, and backed by a real team. We can't compete on
+breadth or maintenance.
+
+(On templates specifically: this server *does* search and fetch templates via
+`search_templates` / `get_template` — but only the ones **installed on your
+ComfyUI** (every node pack's example workflows). The cloud's advantage is a
+*broader catalog* including templates you haven't downloaded, not the mechanism.)
 
 **Where this one genuinely wins:**
 - **It's yours.** Local, private, free, offline-capable. No account, nothing
@@ -83,7 +89,7 @@ box, and let the agent pick per task.
 
 | Primitive | What it exposes | Loop step |
 |---|---|---|
-| **Tools** | `check_comfyui`, `list_nodes`, `get_node`, `list_models` | Discover, don't guess |
+| **Tools** | `check_comfyui`, `list_nodes`, `get_node`, `list_models`, `search_templates`, `get_template` | Discover, don't guess |
 | | `upload_image`, `submit_workflow` | Build → Run |
 | | `get_result`, `get_image` (returns the actual image) | **Look** |
 | | `system_stats`, `get_queue`, `interrupt` | Control |
@@ -130,6 +136,8 @@ At handshake the server tells the agent *when to loop and when not to*:
 | `list_nodes` | `keyword=""` | Nodes whose **class name or display name** matches (a strict superset of the skill's class-only search). Omit keyword for the count. |
 | `get_node` | `class_name` | One node's exact interface: required/optional inputs (type, default, min/max), output types/names, category. |
 | `list_models` | `class_name`, `input_name=""` | The real model files a loader offers, read from its enum — handles **both** the legacy list encoding and the newer `COMBO` encoding. Never hallucinate a filename. |
+| `search_templates` | `keyword=""` | Known-good workflow templates installed on **this** ComfyUI (`/api/workflow_templates` — every pack's example workflows). The local equivalent of Cloud MCP's template search. |
+| `get_template` | `pack`, `name` | Fetches a template's JSON. It's **UI/litegraph format** — adapt to API format (resolve passthroughs, `widgets_values` → named inputs via `get_node`) before submitting. Few-shot from a real graph beats zero-shot. |
 
 **Build → Run → Look**
 | Tool | Args | Returns |

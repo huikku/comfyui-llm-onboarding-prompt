@@ -193,6 +193,62 @@ async def list_models(class_name: str, input_name: str = "") -> str:
     return f"Enum inputs on {class_name}:\n\n" + "\n\n".join(out) if out else f"{class_name} has no enum inputs."
 
 
+@mcp.tool()
+async def search_templates(keyword: str = "") -> str:
+    """Search the known-good workflow templates installed on THIS ComfyUI.
+
+    ComfyUI's own /api/workflow_templates index — the local equivalent of the
+    Cloud MCP's template search. It aggregates the example workflows shipped by
+    every installed node pack (and core templates), so it reflects exactly what
+    your install can run. Matches the keyword against pack name and template name;
+    omit it to list everything.
+
+    Adapting a known-good template beats building zero-shot from specs — fetch one
+    with get_template, then adapt it to API format for the loop.
+    """
+    async with _client() as c:
+        idx: dict[str, list[str]] = (await c.get("/api/workflow_templates")).json()
+    kw = keyword.lower().strip()
+    total = sum(len(v) for v in idx.values())
+    lines: list[str] = []
+    for pack in sorted(idx):
+        names = idx[pack]
+        hits = [n for n in names if not kw or kw in n.lower() or kw in pack.lower()]
+        if hits:
+            lines.append(f"{pack}:")
+            lines.extend(f"  {n}" for n in hits)
+    if not lines:
+        return f"No template matches '{keyword}' among {total} templates in {len(idx)} packs. Try a broader keyword or omit it."
+    head = (
+        f"{total} templates in {len(idx)} packs"
+        + (f" — matching '{keyword}'" if kw else "")
+        + ". Fetch one with get_template(pack, name):\n"
+    )
+    return head + "\n".join(lines)
+
+
+@mcp.tool()
+async def get_template(pack: str, name: str) -> str:
+    """Fetch one installed workflow template as a known-good starting point.
+
+    Returns the template JSON. NOTE: templates are in UI / litegraph format
+    (nodes + links arrays), NOT the API/prompt format submit_workflow needs.
+    To run it in the loop, adapt it to API format — resolve reroute/GetNode/SetNode
+    passthroughs and turn widgets_values into named inputs using get_node — then
+    submit. Few-shot from this real graph beats zero-shot from specs.
+    """
+    async with _client() as c:
+        r = await c.get(f"/api/workflow_templates/{pack}/{name}.json")
+    if r.status_code != 200:
+        return f"No template '{name}' in pack '{pack}' (HTTP {r.status_code}). Use search_templates to list valid pack/name pairs."
+    try:
+        data = r.json()
+    except Exception:  # noqa: BLE001
+        return f"Template '{pack}/{name}' did not return JSON."
+    fmt = "UI/litegraph (adapt to API format before submitting)" if "nodes" in data and "links" in data else "unknown — inspect before submitting"
+    return f"Template {pack}/{name} — format: {fmt}\n\n" + json.dumps(data, indent=2)
+
+
 # --------------------------------------------------------------------------- #
 # RUN
 # --------------------------------------------------------------------------- #
