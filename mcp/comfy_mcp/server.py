@@ -570,7 +570,16 @@ async def install_node_pack(pack_id: str, version: str = "latest") -> str:
     import anyio
 
     async with _client() as c:
-        payload = {"id": pack_id, "version": version, "selected_version": version, "skip_post_install": False}
+        # Manager's handler reads channel/mode via direct key access — omitting
+        # them is a KeyError -> HTTP 500. selected_version drives `<id>@<ver>`.
+        payload = {
+            "id": pack_id,
+            "version": version,
+            "selected_version": version,
+            "skip_post_install": False,
+            "channel": "default",
+            "mode": "cache",
+        }
         r = await c.post("/manager/queue/install", json=payload)
         if r.status_code == 403:
             return ("Blocked by ComfyUI-Manager security level. Lower it (Manager settings) "
