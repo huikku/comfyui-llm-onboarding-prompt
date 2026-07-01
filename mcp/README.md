@@ -15,6 +15,7 @@ the `comfy_loop` / `comfy_skill` prompts serve those files verbatim so they neve
 drift.
 
 - [How it compares to ComfyUI's official Cloud MCP](#how-it-compares-to-comfyui-cloud-mcp) — the honest version
+- [Design position: discovery vs. repair](DESIGN.md) — where a local tool genuinely wins/loses, and the north star
 - [The three MCP primitives](#the-three-mcp-primitives-mapped-to-the-loop)
 - [Tool reference](#tool-reference)
 - [Watch the loop actually work](#watch-the-loop-actually-work)
