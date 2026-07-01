@@ -40,6 +40,7 @@ built on opposite philosophies and are genuinely complementary.
 | **Nodes / models available** | Exactly what *you've installed* — custom nodes, private models, all reflected live via `/object_info` | The cloud catalog: `search_models`, `search_templates`, `search_nodes`, subgraph blueprints |
 | **Workflow templates** | ✓ `search_templates` / `get_template` over the **same open catalog** (`Comfy-Org/workflow_templates`, ~550, browsed live from GitHub — no install) **and** your install's own templates | ✓ over the cloud's copy of that catalog (plus any cloud-only additions) |
 | **Install missing nodes for a template** | ✓ `find_missing_nodes` + `install_node_pack` via ComfyUI-Manager on your host (then `restart_comfyui`) | ✓ handled cloud-side (the cloud already has the packs) |
+| **Token efficiency** | Compact node notation (~90% off `object_info`) + FlowZip graphs (~85% off litegraph) — matters because the loop re-pays discovery every iteration | Not documented |
 | **Building philosophy** | **Loop-first** — discover, build, run, then *iterate on the pixels* until a trained eye accepts it | **Template-first** — match a proven template, then run it |
 | **Quality-iteration discipline** | The whole point: look → critique → change one knob → re-run, enforced in tool docs/responses/instructions | Not the focus; optimized for "get a working result fast" |
 | **Workflow save / share / reproduce** | ✗ (you manage your own files) | ✓ `save_workflow`, `share_workflow`, `import_shared_workflow`, reproducibility tracking |
@@ -96,6 +97,7 @@ box, and let the agent pick per task.
 |---|---|---|
 | **Tools** | `check_comfyui`, `list_nodes`, `get_node`, `list_models`, `search_templates`, `get_template` | Discover, don't guess |
 | | `find_missing_nodes`, `install_node_pack`, `restart_comfyui` | Extend (install what a template needs) |
+| | `inflate_workflow`, `flowzip_to_api` | Compress (token-efficient graphs) |
 | | `upload_image`, `submit_workflow` | Build → Run |
 | | `get_result`, `get_image` (returns the actual image) | **Look** |
 | | `system_stats`, `get_queue`, `interrupt` | Control |
@@ -140,10 +142,12 @@ At handshake the server tells the agent *when to loop and when not to*:
 |---|---|---|
 | `check_comfyui` | — | Node count + device/VRAM, or a clear "not reachable" message. Loop step 0. |
 | `list_nodes` | `keyword=""` | Nodes whose **class name or display name** matches (a strict superset of the skill's class-only search). Omit keyword for the count. |
-| `get_node` | `class_name` | One node's exact interface: required/optional inputs (type, default, min/max), output types/names, category. |
+| `get_node` | `class_name`, `verbose=False` | One node's interface as **compact** `@Name +req:T ?opt:T -out:T` (~90% fewer tokens); `verbose=True` for full JSON (defaults, min/max). |
 | `list_models` | `class_name`, `input_name=""` | The real model files a loader offers, read from its enum — handles **both** the legacy list encoding and the newer `COMBO` encoding. Never hallucinate a filename. |
 | `search_templates` | `keyword=""`, `source="online"` | `online` (default): the full open catalog (`Comfy-Org/workflow_templates`, ~550), searched by name/title/description live from GitHub — no install. `installed`: only what's on this ComfyUI. |
-| `get_template` | `name`, `pack=""`, `source="online"` | Fetches a template's JSON. It's **UI/litegraph format** — adapt to API format (resolve passthroughs, `widgets_values` → named inputs via `get_node`) before submitting. An online template may need nodes/models you haven't installed — verify against `list_nodes`/`list_models` first. |
+| `get_template` | `name`, `pack=""`, `source="online"`, `fmt="flowzip"` | Fetches a template. `fmt="flowzip"` (default) is compact FlowZip text (~85% smaller than raw litegraph JSON); `fmt="json"` for full litegraph. Either way it's litegraph — convert with `flowzip_to_api` before submitting. An online template may need nodes/models you lack — check with `find_missing_nodes`. |
+| `inflate_workflow` | `flowzip` | Expands FlowZip text back into full litegraph JSON. |
+| `flowzip_to_api` | `flowzip` | Converts FlowZip/litegraph → API/prompt format for `submit_workflow`: resolves links, maps widget values to named inputs (type-coerced), skips subgraph/unknown nodes (reported). Review before running; `node_errors` catches drift. |
 
 **Extend** (install what a template needs — requires [ComfyUI-Manager](https://github.com/Comfy-Org/ComfyUI-Manager) on the host)
 | Tool | Args | Returns |
@@ -235,6 +239,7 @@ Or wire it manually in any MCP client config:
 | `COMFYUI_URL` | `http://localhost:8188` | Your ComfyUI server |
 | `COMFYUI_ONBOARDING_DIR` | repo root above this package | Where the `comfy_loop` / `comfy_skill` prompts read their markdown |
 | `COMFYUI_TEMPLATES_REF` | `main` | Git ref of `Comfy-Org/workflow_templates` the online template catalog reads |
+| `COMFYUI_TEMPLATES_LIVE` | unset | Set to `1` to fetch the freshest catalog index from GitHub instead of the bundled compressed snapshot |
 
 ## Pointing at a remote ComfyUI
 
