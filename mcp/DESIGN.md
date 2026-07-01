@@ -52,8 +52,10 @@ Honest pushback on the parts it's tempting to overclaim:
 - **Dependency/version conflict is the real pain, and we do nothing about it.**
   The nastiest part of differing libraries isn't "node missing," it's "installed
   pack X, it broke pack Y / needs a different torch / needs a different ComfyUI
-  version." We have no pinning, no rollback, no snapshot, no conflict resolution.
-  A curated catalog exists precisely to eliminate this failure class.
+  version." We have no rollback, no snapshot, no conflict resolution — and note
+  that *pinning is not the fix* in a latest-first ecosystem (it can worsen
+  conflicts). A curated catalog is what actually eliminates this failure class,
+  which is the cloud's structural advantage.
 - **Reproducibility.** A controlled environment means a template is *known to run*
   — vetted, pinned, identical for everyone. Ours is a snowflake per box: works on
   A, fails on B. Their "limitation" is a reliability feature.
@@ -79,10 +81,18 @@ theirs — it's the combination, and we're positioned to build it:
    cached/bundled node schema for wiring. This is non-negotiable and it's our
    advantage. (Compact-node notation is fine as a *transport* optimization, but
    the source of truth is the live API.)
-2. **Repair: catalog-informed and version-pinned.** Use a template's declared
-   `requiresCustomNodes` / `models` as the plan, but install *known-good pinned
-   versions*, not "latest" — "latest" is what turns repair into conflict roulette.
-   Verify the result against live `object_info` before continuing.
+2. **Repair: catalog-informed, latest-first, robust to drift.** Use a template's
+   declared `requiresCustomNodes` / `models` as the plan, and **install latest** —
+   that is what the ComfyUI ecosystem does (Manager defaults to latest; users
+   "Update All"), so latest matches both user expectation and the rest of their
+   install. Do NOT pin a pack *backward* to match a stale template: with everything
+   else on the box at latest, an old pinned pack can pull incompatible deps and
+   *create* the conflicts pinning was meant to avoid. Version drift (e.g. a template
+   whose stored widgets predate a node update) is a *template* problem — fix it by
+   **adapting to the live interface** (`object_info` + the loop's `node_errors`),
+   not by downgrading the user's node. Keep `version` available for the narrow cases
+   (a known-broken latest, or reproducing someone's exact setup), but don't default
+   to it or build a lockfile system around it.
 3. **Honest failure is a feature.** When a graph can't run on this box, say
    *exactly* why — which node/model is missing or conflicting — and stop. A
    controlled cloud never has to do this; for a local tool it's a real
@@ -92,9 +102,11 @@ theirs — it's the combination, and we're positioned to build it:
 
 - **Keep:** live `object_info` discovery, compact-node transport, the
   look→critique→iterate loop, honest `node_errors` surfacing.
-- **Fix:** the install path — move from "install latest pack" toward
-  **version-pinned, dependency-aware** installs; improve class→pack resolution
-  (it currently takes the first registry match and can pick the wrong pack).
+- **Fix:** class→pack resolution (it currently takes the first registry match and
+  can pick the wrong pack — e.g. resolved `SimpleMath+` to a lora pack). Keep
+  installing **latest** (ecosystem-correct); the real reliability work is making
+  the loop robust to version drift by remapping against the live interface, not
+  pinning versions.
 - **Added (informed by the cloud, on-identity):** `template_slots` + `run_template`
   with input overrides — run a known-good graph without loading the JSON into
   context (litegraph→API under the hood; subgraph templates reported, not expanded).
@@ -105,14 +117,15 @@ theirs — it's the combination, and we're positioned to build it:
   already installed (ground truth), and downloads into the right folder — no restart
   (loaders re-scan). This was the half-repair gap; nodes AND models are now covered.
   A broader source (HuggingFace/Civitai search, as the cloud does) remains a possible
-  extension, still subject to the pinned-and-verified rule.
+  extension, still subject to the verify-against-ground-truth rule.
 - **Don't chase:** becoming a cloud catalog or a `cql`-style graph query engine.
   Those are the cloud's game; they don't serve the local/loop identity.
 
 ## One-line summary
 
 We are better at **knowing the truth of your box**; we are worse at **fixing it
-reliably**, and we currently ignore its worst failure mode. Double down on
-ground-truth discovery; make repair catalog-informed and version-pinned; be
-honest when a graph can't run. That is the defensible local position — not a
-blanket claim of superiority.
+reliably**. Double down on ground-truth discovery; install **latest**
+(ecosystem-correct) and make the loop robust to version drift by adapting to the
+live interface; be honest when a graph can't run. That is the defensible local
+position — not a blanket claim of superiority, and not backward version-pinning
+that fights how ComfyUI users actually work.
