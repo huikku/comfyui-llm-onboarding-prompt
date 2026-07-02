@@ -43,12 +43,12 @@ built on opposite philosophies and are genuinely complementary.
 | **Install missing nodes for a template** | ✓ `find_missing_nodes` + `install_node_pack` via ComfyUI-Manager on your host (then `restart_comfyui`) | ✓ handled cloud-side (the cloud already has the packs) |
 | **Model discovery / download** | ✓ `search_models` (Manager catalog, flags what's already installed) + `install_model` into the right folder | ✓ `search_models` over a broader HuggingFace/Civitai catalog with source URLs |
 | **Run a template with overrides** | ✓ `template_slots` + `run_template` (no graph loaded into context) | ✓ `get_template_schema` + `run_template` / `apply_slots` |
-| **Token efficiency** | Compact node notation (~90% off `object_info`) + FlowZip graphs (~85% off litegraph) — matters because the loop re-pays discovery every iteration | Not documented |
+| **Token efficiency** | Compact node notation (**93%** off `object_info`, measured over 987 nodes) — matters because node discovery is re-paid every loop pass. FlowZip graphs are ~72% off raw litegraph (median, 63 templates) — though minified stripped JSON achieves nearly the same (see `tests/bench.py`) | Not documented |
 | **Building philosophy** | **Loop-first** — discover, build, run, then *iterate on the pixels* until a trained eye accepts it | **Template-first** — match a proven template, then run it |
 | **Quality-iteration discipline** | The whole point: look → critique → change one knob → **keep-best/revert (ratchet)** → re-run, enforced in tool docs/responses/instructions (ratchet adapted from Karpathy's AutoResearch) | Not the focus; optimized for "get a working result fast" |
 | **Workflow save / share / reproduce** | ✗ (you manage your own files) | ✓ `save_workflow`, `share_workflow`, `import_shared_workflow`, reproducibility tracking |
 | **Job orchestration** | Basic (`submit`, `get_result`, `get_queue`, `interrupt`) | Mature (`get_job_status`, `use_previous_output`, `cancel_job`) |
-| **Maturity / support** | ~400 lines of hackable MIT Python, unmaintained hobby code | Production, built and maintained by the ComfyUI team |
+| **Maturity / support** | ~1,200 lines of hackable MIT Python, unmaintained hobby code | Production, built and maintained by the ComfyUI team |
 | **Transparency** | You can read and edit every line | Closed service |
 
 ### Is ours actually "better"? — an honest take
@@ -81,7 +81,7 @@ which the loop's discovery step catches.)
   model look at the output and keep tuning one parameter at a time until it's
   right*, and refuses to treat a green run as done. That discipline is the thing
   the official one doesn't emphasize.
-- **It's transparent and hackable.** ~400 lines of MIT Python. Read it, fork it,
+- **It's transparent and hackable.** ~1,200 lines of MIT Python. Read it, fork it,
   add a tool, change a nudge.
 
 **The clean rule of thumb:**
@@ -155,7 +155,7 @@ The ratchet/ledger/pivot are adapted from [Karpathy's AutoResearch loop](https:/
 | `list_models` | `class_name`, `input_name=""` | The real model files a loader offers **on disk** (ground truth), read from its enum — handles both the legacy list and `COMBO` encodings. Never hallucinate a filename. |
 | `search_models` | `keyword=""`, `model_type=""` | The downloadable model **catalog** (ComfyUI-Manager's list) — find checkpoints/LoRAs/VAEs/upscalers you may not have yet; each result flags whether it's already installed. Install with `install_model`. |
 | `search_templates` | `keyword=""`, `source="online"` | `online` (default): the full open catalog (`Comfy-Org/workflow_templates`, ~550), searched by name/title/description live from GitHub — no install. `installed`: only what's on this ComfyUI. |
-| `get_template` | `name`, `pack=""`, `source="online"`, `fmt="flowzip"` | Fetches a template. `fmt="flowzip"` (default) is compact FlowZip text (~85% smaller than raw litegraph JSON); `fmt="json"` for full litegraph. Either way it's litegraph — convert with `flowzip_to_api` before submitting. An online template may need nodes/models you lack — check with `find_missing_nodes`. |
+| `get_template` | `name`, `pack=""`, `source="online"`, `fmt="flowzip"` | Fetches a template. `fmt="flowzip"` (default) is compact FlowZip text (~72% smaller than raw litegraph JSON, median); `fmt="json"` for full litegraph. Either way it's litegraph — convert with `flowzip_to_api` before submitting. An online template may need nodes/models you lack — check with `find_missing_nodes`. |
 | `inflate_workflow` | `flowzip` | Expands FlowZip text back into full litegraph JSON. |
 | `flowzip_to_api` | `flowzip` | Converts FlowZip/litegraph → API/prompt format for `submit_workflow`: resolves links, maps widget values to named inputs (type-coerced), skips subgraph/unknown nodes (reported). Review before running; `node_errors` catches drift. |
 | `template_slots` | `name`, `source="online"`, `pack=""` | Lists a template's overridable inputs (node_id → params + current values) **without loading the full graph** — the curated parameter list for `run_template`. |

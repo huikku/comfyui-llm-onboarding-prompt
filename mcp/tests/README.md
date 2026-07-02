@@ -19,11 +19,12 @@ COMFYUI_URL=http://localhost:8188 python tests/integration_smoke.py   # exits no
 COMFYUI_URL=http://localhost:8188 python tests/bench.py               # compression/conversion metrics
 ```
 
-`integration_smoke.py` covers: tool registration, `check_comfyui`, `list_nodes`
-(compact), `get_node`, `list_models`, `search_models`, `search_templates`,
-`get_template` (flowzip), `find_missing_nodes`, error robustness, all three
-resources, `get_queue`, `system_stats`, and a full text-to-image
-submit→result→get_image. It does **not** install anything or restart ComfyUI.
+`integration_smoke.py` covers (17 checks): tool registration, `check_comfyui`,
+`list_nodes` (compact), `get_node`, `list_models`, `search_models`,
+`search_templates`, `get_template` (flowzip), `find_missing_nodes`,
+`template_slots`, error robustness, all three resources, `get_queue`,
+`system_stats`, and a full text-to-image submit→result→get_image. It does
+**not** install anything or restart ComfyUI.
 
 ## Mutating paths — manual, and verified once on a live box
 

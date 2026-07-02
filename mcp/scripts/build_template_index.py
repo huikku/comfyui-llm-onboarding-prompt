@@ -5,7 +5,7 @@ Fetches Comfy-Org/workflow_templates' templates/index.json, flattens it to a
 compact {name, title, description, category} list, and writes it gzipped to
 comfy_mcp/data/templates_index.json.gz.
 
-Only the *index* is bundled (~60 KB gz) — the 567 workflow JSONs (~28 MB) stay
+Only the *index* is bundled (~30 KB gz) — the ~570 workflow JSONs (~28 MB) stay
 in the repo and are fetched on demand by get_template. Stdlib only, so the
 GitHub Action needs no pip install.
 

@@ -21,17 +21,18 @@ Two ideas, and everything here is built on them:
 | **[`ONBOARDING_PROMPT-v2.md`](ONBOARDING_PROMPT-v2.md)** | The build-and-validate prompt: picks the right JSON format, verifies model files exist, and **executes the workflow** to debug from real errors before declaring it done. | You mainly need a *correct, validated* workflow and will judge the output yourself. |
 | **[`ONBOARDING_PROMPT-v1.md`](ONBOARDING_PROMPT-v1.md)** | The original, node-discovery-only prompt — teaches the model to query `/object_info` so it stops inventing node names. Small and simple. | All you want is correct node usage, no execution loop. |
 | **[`SKILL.md`](SKILL.md)** | The same method packaged as a **Claude Code skill** — auto-loads when you ask about ComfyUI workflows, no pasting. | You're in Claude Code and want this behavior to just happen. |
+| **[`mcp/`](mcp/)** | **comfy-mcp** — the whole method as a loop-aware **MCP server** for your own ComfyUI: 22 tools (discover real nodes/models, search + run the official template catalog, install missing packs/models, submit, fetch the pixels so the agent can *look*), plus the loop served as MCP prompts. See [`mcp/README.md`](mcp/README.md) and the honest [Cloud-MCP comparison](mcp/README.md#how-it-compares-to-comfyui-cloud-mcp). | Your agent speaks MCP and you want tools, not pasted prompts — running against your own install, local and private. |
 
-If you only read one, read **`COMFYUI_WORKFLOW_LOOP_PROMPT.md`** — it supersets the others.
+If you only read one prompt, read **`COMFYUI_WORKFLOW_LOOP_PROMPT.md`** — it supersets the others. If your agent speaks MCP, install **`mcp/`** and get the same loop as tools.
 
 ---
 
 ## The loop
 
 ```
-        ┌───────────────────────────────────────────────┐
-        │                                               (next pass)
-        ▼                                                   │
+        ┌─────────────────────────────────────────────────────┐
+        │                                                (next pass)
+        ▼                                                     │
   BUILD / ADJUST ──▶ RUN ──▶ LOOK ──▶ CRITIQUE ──▶ DECIDE ──┘
    one change      /prompt   fetch &   name the    defect? → fix & loop
    per pass        + fix     actually  specific    none?   → present &
@@ -63,6 +64,13 @@ https://raw.githubusercontent.com/huikku/comfyui-llm-onboarding-prompt/main/COMF
 mkdir -p ~/.claude/skills/comfyui-workflows
 curl -sL https://raw.githubusercontent.com/huikku/comfyui-llm-onboarding-prompt/main/SKILL.md \
   -o ~/.claude/skills/comfyui-workflows/SKILL.md
+```
+
+**Install the MCP server (any MCP client).** The same loop as 22 tools against your own ComfyUI:
+```bash
+git clone https://github.com/huikku/comfyui-llm-onboarding-prompt && cd comfyui-llm-onboarding-prompt/mcp
+pip install -e .
+claude mcp add comfyui -- comfy-mcp        # or wire `comfy-mcp` into any MCP client config
 ```
 
 ### What to ask for

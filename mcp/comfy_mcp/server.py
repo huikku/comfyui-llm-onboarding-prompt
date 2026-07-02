@@ -37,7 +37,7 @@ from .compress import (
 COMFY_URL = os.environ.get("COMFYUI_URL", "http://localhost:8188").rstrip("/")
 
 # The official, open template catalog — the same repo the Cloud MCP's template
-# search is built from. Lets us browse/fetch all ~500 templates WITHOUT installing
+# search is built from. Lets us browse/fetch all ~550 templates WITHOUT installing
 # them, straight from GitHub. Override the ref with COMFYUI_TEMPLATES_REF.
 _TPL_REPO = "https://raw.githubusercontent.com/Comfy-Org/workflow_templates"
 _TPL_REF = os.environ.get("COMFYUI_TEMPLATES_REF", "main")
@@ -317,7 +317,7 @@ async def search_templates(keyword: str = "", source: str = "online") -> str:
     """Search known-good workflow templates to adapt (few-shot beats zero-shot).
 
     source="online" (default): the OFFICIAL open catalog on GitHub
-    (Comfy-Org/workflow_templates) — the same ~500-template set the Cloud MCP's
+    (Comfy-Org/workflow_templates) — the same ~550-template set the Cloud MCP's
     search is built from. You do NOT need these installed; they're browsed
     straight from the repo. Matches keyword against name + title + description.
 
@@ -377,8 +377,8 @@ async def get_template(name: str, pack: str = "", source: str = "online", fmt: s
     needed; `pack` is ignored. source="installed": from this ComfyUI (`pack`
     required).
 
-    fmt="flowzip" (default): compact FlowZip text — ~85% fewer tokens than the raw
-    litegraph JSON, enough to read/adapt the graph. fmt="json": the full litegraph.
+    fmt="flowzip" (default): compact FlowZip text — ~72% fewer tokens than the raw
+    litegraph JSON (median), enough to read/adapt the graph. fmt="json": the full litegraph.
     Either way it's litegraph, NOT the API/prompt format submit_workflow needs —
     adapt to API (resolve passthroughs, widgets_values -> named inputs via
     get_node), or inflate a FlowZip with inflate_workflow. If from the online
